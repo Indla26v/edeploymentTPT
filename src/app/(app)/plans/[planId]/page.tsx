@@ -21,6 +21,8 @@ import { guarded } from "@/lib/plans/guard";
 import { getPlanDetail } from "@/lib/queries/plans";
 import { PLANNING_STATUSES, planStages, type PlanStatus } from "@/lib/workflow/plan";
 import { ComponentActions } from "./component-actions";
+import { ExecNav } from "./execution/exec-nav";
+import { StageButtons } from "./execution/stage-buttons";
 
 export const metadata: Metadata = { title: "Plan" };
 
@@ -88,6 +90,7 @@ async function Plan({ params }: PageProps<"/plans/[planId]">) {
               </Link>
             </Button>
           )}
+          {["UNIT_OFFICER", "INITIATING_OFFICER"].includes(user.activeRole) && ["published", "live"].includes(status) && <StageButtons planId={plan.id} status={status} />}
           {mine && (
             <Button size="sm" asChild>
               <Link href={`/plans/${plan.id}/components/${mine.id}`}>
@@ -100,6 +103,9 @@ async function Plan({ params }: PageProps<"/plans/[planId]">) {
       summary={
         <div className="flex flex-col gap-3">
           <StageTracker stages={planStages(status, { returned: counts.returned, pendingComponents: pending })} />
+          {["published", "live", "completed"].includes(status) && (
+            <ExecNav planId={plan.id} show={{ live: can(user, "execution.live"), documents: can(user, "execution.idcards"), accommodation: can(user, "execution.accommodation"), equipment: user.activeRole === "UNIT_OFFICER" }} />
+          )}
           <SummaryStrip
             items={[
               { label: "Dates", value: fmtRange(windows[0]?.startsAt, windows.at(-1)?.endsAt) },

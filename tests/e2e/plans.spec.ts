@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 
+import { signCheckinToken } from "../../src/lib/execution/qr";
 import { authFile, dbQuery } from "./helpers";
 
 test.describe("plan → propose → consolidate (UI)", () => {
@@ -160,6 +161,25 @@ test.describe("plan → propose → consolidate (UI)", () => {
     await expect(io2.getByText("5 officers notified")).toBeVisible();
     const after = await dbQuery<{ n: number }>("select count(*)::int n from notifications_outbox where template like 'duty.%' and payload->>'plan' = $1", [title]);
     expect(after[0]!.n).toBe(5);
+
+    // 9. ID cards PDF, go live, an officer checks in by scanning the QR, the live count updates
+    const planId = planUrl.split("/").pop()!;
+    const pdf = await io2.request.get(`/api/plans/${planId}/id-cards?layout=6`);
+    expect(pdf.headers()["content-type"]).toBe("application/pdf");
+    await io2.goto(planUrl);
+    await io2.getByRole("button", { name: "Go live" }).click();
+    await expect(io2.getByText("Live").first()).toBeVisible();
+    const [officer] = await dbQuery<{ person_id: string }>("select (snapshot->0->>'personId') person_id from plan_publications where plan_id = $1 order by version desc limit 1", [planId]);
+    const phone = await browser.newContext({ ...(await import("@playwright/test")).devices["Pixel 7"] });
+    const scan = await phone.newPage();
+    await scan.goto(`/c/${signCheckinToken(planId, officer!.person_id)}`);
+    await scan.getByRole("button", { name: "Check in" }).click();
+    await expect(scan.getByText("Checked in. Report to your posting.")).toBeVisible();
+    await scan.goto(`/c/${signCheckinToken(planId, officer!.person_id).slice(0, -3)}xyz`);
+    await expect(scan.getByText("This QR code is not valid")).toBeVisible();
+    await phone.close();
+    await io2.goto(`${planUrl}/live`);
+    await expect(io2.getByRole("button", { name: /^Present 1/ })).toBeVisible();
     await io2Ctx.close();
   });
 });

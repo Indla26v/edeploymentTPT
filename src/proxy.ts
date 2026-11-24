@@ -18,5 +18,5 @@ export function proxy(request: NextRequest) {
 
 export const config = {
   // Everything except: login, Better Auth API, QR check-in, cron, Next internals and static files.
-  matcher: ["/((?!login|api/auth|api/cron|c/|_next/|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|webp|ico|txt)$).*)"],
+  matcher: ["/((?!login|api/auth|api/cron|api/checkin|c/|_next/|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|webp|ico|txt)$).*)"],
 };

@@ -37,3 +37,6 @@ export const forceRequestStatus = pgEnum("force_request_status", ["sent", "commi
 export const personnelSource = pgEnum("personnel_source", ["nominal_roll", "preference", "manual"]);
 
 export const assignmentSource = pgEnum("assignment_source", ["suggested", "manual", "preference"]);
+
+export const attendanceEvent = pgEnum("attendance_event", ["check_in", "check_out"]);
+export const attendanceVia = pgEnum("attendance_via", ["qr", "manual"]);
