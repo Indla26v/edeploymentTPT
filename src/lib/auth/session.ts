@@ -32,6 +32,7 @@ export type CurrentUser = {
   unitName: string;
   stationId: string | null;
   mustChangePassword: boolean;
+  twoFactorEnabled: boolean;
   sessionToken: string;
   roles: Role[];
   activeRole: Role;
@@ -60,6 +61,7 @@ export async function loadUser(db: DbOrTx, userId: string, requested: Role | nul
       isActive: users.isActive,
       personId: users.personId,
       mustChangePassword: users.mustChangePassword,
+      twoFactorEnabled: users.twoFactorEnabled,
       rankName: ranks.name,
       stationId: persons.stationId,
       personUnitId: persons.unitId,
@@ -117,6 +119,7 @@ export async function loadUser(db: DbOrTx, userId: string, requested: Role | nul
     unitName,
     stationId,
     mustChangePassword: row.mustChangePassword,
+    twoFactorEnabled: row.twoFactorEnabled,
     sessionToken,
     roles,
     activeRole,
@@ -127,9 +130,15 @@ export async function loadUser(db: DbOrTx, userId: string, requested: Role | nul
 }
 
 /** Use in pages/layouts: redirects to login when signed out, and to the password page when a change is required. */
+/** State Admins must use two-factor sign-in unless REQUIRE_ADMIN_2FA=false (demo / local only). */
+export function needsTwoFactorSetup(user: Pick<CurrentUser, "activeRole" | "twoFactorEnabled">): boolean {
+  return user.activeRole === "SUPER_ADMIN" && !user.twoFactorEnabled && process.env.REQUIRE_ADMIN_2FA !== "false";
+}
+
 export async function requireUser(opts: { allowPasswordChange?: boolean } = {}): Promise<CurrentUser> {
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   if (user.mustChangePassword && !opts.allowPasswordChange) redirect("/account/password?required=1");
+  if (needsTwoFactorSetup(user) && !opts.allowPasswordChange) redirect("/account/two-factor?required=1");
   return user;
 }

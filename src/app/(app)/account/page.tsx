@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import Link from "next/link";
-import { KeyRound, MonitorSmartphone } from "lucide-react";
+import { KeyRound, MonitorSmartphone, ShieldCheck } from "lucide-react";
 
 import { DetailPage, SummaryStrip } from "@/components/layout/page-layouts";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +31,11 @@ async function Account() {
       breadcrumb={[{ label: "Account" }]}
       actions={
         <>
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/account/two-factor">
+              <ShieldCheck /> Two-step sign-in {user.twoFactorEnabled ? "(on)" : ""}
+            </Link>
+          </Button>
           <Button variant="outline" size="sm" asChild>
             <Link href="/account/sessions">
               <MonitorSmartphone /> Active sessions

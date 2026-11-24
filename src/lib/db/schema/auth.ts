@@ -22,6 +22,7 @@ export const users = pgTable(
     failedLoginCount: integer().notNull().default(0),
     lockedUntil: timestamp({ withTimezone: true }),
     lastLoginAt: timestamp({ withTimezone: true }),
+    twoFactorEnabled: boolean().notNull().default(false),
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
   },
@@ -92,4 +93,21 @@ export const rateLimits = pgTable(
     lastRequest: bigint({ mode: "number" }).notNull(),
   },
   (t) => [uniqueIndex("rate_limits_key_uq").on(t.key)],
+);
+
+/** TOTP secrets and backup codes (Better Auth two-factor plugin; values are encrypted). */
+export const twoFactors = pgTable(
+  "two_factors",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    secret: text().notNull(),
+    backupCodes: text().notNull(),
+    userId: uuid()
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    verified: boolean().notNull().default(true),
+    failedVerificationCount: integer().notNull().default(0),
+    lockedUntil: timestamp({ withTimezone: true }),
+  },
+  (t) => [index("two_factors_user_idx").on(t.userId), index("two_factors_secret_idx").on(t.secret)],
 );

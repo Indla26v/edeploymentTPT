@@ -27,9 +27,11 @@ export async function signInAction(_prev: SignInState, formData: FormData): Prom
   const { username, password, next } = parsed.data;
   const h = await headers();
 
+  let secondFactor = false;
   const outcome = await signInWithLockout(getDb(), { username, password }, async (u, p) => {
     try {
-      await getAuth().api.signInUsername({ body: { username: u, password: p }, headers: h });
+      const r = (await getAuth().api.signInUsername({ body: { username: u, password: p }, headers: h })) as { twoFactorRedirect?: boolean } | null;
+      secondFactor = !!r?.twoFactorRedirect;
       return true;
     } catch {
       return false;
@@ -54,6 +56,35 @@ export async function signInAction(_prev: SignInState, formData: FormData): Prom
     return { error: "Wrong username or password.", username };
   }
 
+  if (secondFactor) {
+    // Password was right; the session is created only after the authenticator code.
+    await writeAudit(getDb(), { actorUserId: outcome.userId, action: "login.password_ok", entity: "user", entityId: outcome.userId, ip, userAgent: h.get("user-agent") });
+    redirect(`/login/two-factor?next=${encodeURIComponent(safeNext(next))}`);
+  }
   await writeAudit(getDb(), { actorUserId: outcome.userId, action: "login.success", entity: "user", entityId: outcome.userId, ip, userAgent: h.get("user-agent") });
   redirect(outcome.mustChangePassword ? "/account/password?required=1" : safeNext(next));
+}
+
+export type TwoFactorState = { error?: string } | undefined;
+
+/** Second step of sign-in: the 6-digit authenticator code, or a backup code. */
+export async function verifyTwoFactorAction(_prev: TwoFactorState, formData: FormData): Promise<TwoFactorState> {
+  const code = String(formData.get("code") ?? "").replace(/\s+/g, "");
+  const backup = formData.get("backup") === "1";
+  const next = safeNext(String(formData.get("next") ?? ""));
+  if (!code) return { error: "Enter the code." };
+  const h = await headers();
+  let userId: string | null = null;
+  try {
+    const r = (backup
+      ? await getAuth().api.verifyBackupCode({ body: { code }, headers: h })
+      : await getAuth().api.verifyTOTP({ body: { code }, headers: h })) as { user?: { id: string } } | null;
+    userId = r?.user?.id ?? null;
+  } catch (e) {
+    const msg = (e as { body?: { message?: string } })?.body?.message ?? "";
+    if (/expired|invalid two factor cookie|two_factor/i.test(msg)) return { error: "This sign-in has expired. Start again from the sign-in page." };
+    return { error: backup ? "That backup code isn't valid." : "Wrong code. Check the time on your phone and try again." };
+  }
+  await writeAudit(getDb(), { actorUserId: userId, action: "login.success_2fa", entity: "user", entityId: userId, ip: h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null, userAgent: h.get("user-agent") });
+  redirect(next);
 }

@@ -1,5 +1,6 @@
 import { betterAuth, type BetterAuthPlugin } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { twoFactor } from "better-auth/plugins/two-factor";
 import { username } from "better-auth/plugins/username";
 
 import type { Db } from "../db/client";
@@ -62,6 +63,8 @@ export function createAuth(db: Db, opts: { plugins?: BetterAuthPlugin[] } = {}) 
         usernameValidator: (u) => USERNAME_PATTERN.test(u),
         displayUsername: false,
       }),
+      // Optional TOTP (authenticator app) second factor; required for State Admins (see REQUIRE_ADMIN_2FA).
+      twoFactor({ issuer: "eDeployment", backupCodeOptions: { amount: 8 } }),
       ...(opts.plugins ?? []),
     ],
   });

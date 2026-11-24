@@ -34,6 +34,7 @@ jobs:
       BETTER_AUTH_SECRET: ci-only-secret-not-used-anywhere-else-0123456789
       BETTER_AUTH_URL: http://localhost:3100
       SHOW_DEMO_ACCOUNTS: "true"
+      REQUIRE_ADMIN_2FA: "false"
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
