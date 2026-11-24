@@ -11,20 +11,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { getUnitDashboard } from "@/lib/queries/dashboard";
+import { requireUser } from "@/lib/auth/session";
+import { ROLE_LABEL } from "@/lib/authz/roles";
+import { getStateOverview, getUnitDashboard } from "@/lib/queries/dashboard";
 import { formatNumber } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
-const DEMO_UNIT_CODE = "DEMO-DIST";
-
 export default function DashboardPage() {
   return (
     <div className="space-y-4">
-      <PageHeader
-        title="Dashboard"
-        description="Force strength, availability and stations for your unit. Plan pipeline cards appear once the plan workflow lands (phase 4)."
-      />
+      <PageHeader title="Dashboard" description="Force strength, availability and stations for your unit." />
       <Suspense fallback={<DashboardSkeleton />}>
         <DashboardData />
       </Suspense>
@@ -34,9 +31,11 @@ export default function DashboardPage() {
 
 async function DashboardData() {
   await connection();
+  const user = await requireUser();
+  if (!user.unitId) return <StateOverview />;
   let data: Awaited<ReturnType<typeof getUnitDashboard>>;
   try {
-    data = await getUnitDashboard(DEMO_UNIT_CODE);
+    data = await getUnitDashboard(user.unitId);
   } catch (err) {
     console.error("dashboard query failed", err);
     return (
@@ -48,7 +47,7 @@ async function DashboardData() {
     );
   }
   if (!data) {
-    return <EmptyState icon={Database} title="No data yet" description="Run pnpm db:seed to load the demo district." />;
+    return <EmptyState icon={Database} title={`No data for ${ROLE_LABEL[user.activeRole]}`} description="Your unit has no stations or officers yet." />;
   }
 
   const { totals, byRank, stations } = data;
@@ -144,5 +143,40 @@ function DashboardSkeleton() {
         <Skeleton className="h-[520px] rounded-2xl" />
       </div>
     </div>
+  );
+}
+
+async function StateOverview() {
+  const rows = await getStateOverview();
+  return (
+    <Card className="min-w-0">
+      <CardHeader>
+        <CardTitle>State police units</CardTitle>
+        <CardDescription>Strength and availability by unit.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead>Unit</TableHead>
+              <TableHead className="hidden sm:table-cell">Stations / offices</TableHead>
+              <TableHead className="text-right">Available</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((u) => (
+              <TableRow key={u.id}>
+                <TableCell className="font-medium">{u.name}</TableCell>
+                <TableCell className="tabular hidden sm:table-cell">{u.stations}</TableCell>
+                <TableCell className="tabular text-right">
+                  <span className="font-semibold">{u.available}</span>
+                  <span className="text-muted-foreground"> / {u.persons}</span>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   );
 }

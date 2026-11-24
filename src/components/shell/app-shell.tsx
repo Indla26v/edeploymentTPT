@@ -15,7 +15,7 @@ import { RoleSwitcher, RoleSwitcherList } from "./role-switcher";
 import { SidebarNav } from "./sidebar-nav";
 import { UserMenu } from "./user-menu";
 
-export type ShellUser = { name: string; designation: string; unitName: string; roles: Role[]; defaultRole: Role };
+export type ShellUser = { name: string; designation: string; unitName: string; roles: Role[]; defaultRole: Role; permissions: string[] };
 
 export function AppShell({
   user,
@@ -35,7 +35,7 @@ export function AppShell({
   const [collapsed, setCollapsed] = useLocalSetting("edeploy.sidebarCollapsed", false);
 
   return (
-    <RoleProvider roles={user.roles} defaultRole={user.defaultRole} onChange={onRoleChange}>
+    <RoleProvider roles={user.roles} defaultRole={user.defaultRole} permissions={user.permissions} onChange={onRoleChange}>
       <TooltipProvider>
         <div className="flex min-h-dvh">
           {/* Desktop sidebar: full or icon rail */}

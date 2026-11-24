@@ -6,13 +6,10 @@ import { alias } from "drizzle-orm/pg-core";
 import { getDb } from "@/lib/db";
 import { divisions, persons, ranks, stations, units } from "@/lib/db/schema";
 
-/**
- * Dashboard figures for a unit. Phase 2 derives `unitCode` from the signed-in user's role scope;
- * until then the demo unit is used.
- */
-export async function getUnitDashboard(unitCode: string) {
+/** Dashboard figures for one unit (the signed-in user's unit; callers enforce scope). */
+export async function getUnitDashboard(unitId: string) {
   const db = getDb();
-  const [unit] = await db.select().from(units).where(eq(units.code, unitCode)).limit(1);
+  const [unit] = await db.select().from(units).where(eq(units.id, unitId)).limit(1);
   if (!unit) return null;
 
   const [totals] = await db
@@ -66,4 +63,19 @@ export async function getUnitDashboard(unitCode: string) {
     byRank,
     stations: stationRows,
   };
+}
+
+/** State-level overview: one row per unit. */
+export async function getStateOverview() {
+  return getDb()
+    .select({
+      id: units.id,
+      name: units.name,
+      type: units.type,
+      persons: sql<number>`(select count(*) from ${persons} p where p.unit_id = ${units.id})`.mapWith(Number),
+      available: sql<number>`(select count(*) from ${persons} p where p.unit_id = ${units.id} and p.availability = 'available')`.mapWith(Number),
+      stations: sql<number>`(select count(*) from ${stations} s where s.unit_id = ${units.id})`.mapWith(Number),
+    })
+    .from(units)
+    .orderBy(asc(units.displayOrder));
 }

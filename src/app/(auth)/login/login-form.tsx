@@ -1,168 +1,119 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
-import { unstable_OneTimePasswordField as OTPField } from "radix-ui";
-import { ArrowLeft, ArrowRight, Info, Loader2, Smartphone } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { ArrowRight, Eye, EyeOff, Loader2, Lock, UserRound } from "lucide-react";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { signInAction, type SignInState } from "./actions";
 
-type Step = "phone" | "otp" | "welcome";
+export type DemoAccount = { username: string; role: string; who: string };
 
-/**
- * Phase 1: the sign-in screens as designed (mobile → OTP → officer confirmation, Manual A p6–7).
- * Phase 2 wires this to Better Auth's phone-number OTP with rate limiting; only pre-registered numbers can sign in.
- */
-export function LoginForm() {
-  const [step, setStep] = React.useState<Step>("phone");
-  const [phone, setPhone] = React.useState("");
-  const [otp, setOtp] = React.useState("");
-  const [busy, setBusy] = React.useState(false);
-  const [seconds, setSeconds] = React.useState(30);
-  const phoneValid = /^[6-9]\d{9}$/.test(phone);
+export function LoginForm({ demoAccounts, demoPassword }: { demoAccounts?: DemoAccount[]; demoPassword?: string }) {
+  const params = useSearchParams();
+  const [state, action, pending] = React.useActionState<SignInState, FormData>(signInAction, undefined);
+  const [show, setShow] = React.useState(false);
+  const userRef = React.useRef<HTMLInputElement>(null);
+  const passRef = React.useRef<HTMLInputElement>(null);
 
-  React.useEffect(() => {
-    if (step !== "otp" || seconds === 0) return;
-    const t = setTimeout(() => setSeconds((s) => s - 1), 1000);
-    return () => clearTimeout(t);
-  }, [step, seconds]);
-
-  const fakeWait = (next: () => void) => {
-    setBusy(true);
-    setTimeout(() => {
-      setBusy(false);
-      next();
-    }, 600);
+  const fill = (u: string) => {
+    if (userRef.current) userRef.current.value = u;
+    if (passRef.current && demoPassword) passRef.current.value = demoPassword;
+    passRef.current?.focus();
   };
 
   return (
-    <Card className="w-full max-w-[420px] gap-6 rounded-3xl p-2 shadow-lifted sm:p-4">
-      <CardContent className="space-y-6 px-4 sm:px-5">
-        <Badge tone="info" className="py-1">
-          <Info /> Design preview — OTP is connected in phase 2
-        </Badge>
-
-        {step === "phone" && (
-          <form
-            className="space-y-6"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (phoneValid) fakeWait(() => (setStep("otp"), setSeconds(30)));
-            }}
-          >
+    <div className="w-full max-w-[400px] space-y-4">
+      <Card className="gap-5 rounded-3xl p-2 shadow-lifted sm:p-3">
+        <CardContent className="space-y-5 px-3 sm:px-4">
+          <div className="space-y-1">
+            <h2 className="text-xl font-semibold tracking-tight">Sign in</h2>
+            <p className="text-sm text-muted-foreground">Use the username and password issued by your unit.</p>
+          </div>
+          <form action={action} className="space-y-4" noValidate>
+            <input type="hidden" name="next" value={params.get("next") ?? ""} />
             <div className="space-y-1.5">
-              <h2 className="text-2xl font-semibold tracking-tight">Sign in</h2>
-              <p className="text-sm text-muted-foreground">Use the mobile number registered with your unit. We&apos;ll send a one-time password.</p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="login-phone">Mobile number</Label>
-              <div className="flex gap-2">
-                <span className="inline-flex h-12 items-center gap-1.5 rounded-full bg-muted px-4 text-sm font-medium text-muted-foreground">
-                  <Smartphone className="size-4" aria-hidden /> +91
-                </span>
+              <Label htmlFor="username">Username</Label>
+              <div className="relative">
+                <UserRound className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
                 <Input
-                  id="login-phone"
-                  inputMode="numeric"
-                  autoComplete="tel-national"
-                  maxLength={10}
-                  placeholder="98xxxxxxxx"
-                  className="h-12 rounded-full px-5 text-base tracking-wide"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
-                  aria-invalid={phone.length === 10 && !phoneValid}
+                  ref={userRef}
+                  id="username"
+                  name="username"
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  defaultValue={state?.username}
+                  required
+                  className="h-11 pl-10"
+                  placeholder="e.g. demo-1281"
+                  aria-invalid={!!state?.error}
                 />
               </div>
             </div>
-            <Button type="submit" size="lg" className="w-full" disabled={!phoneValid || busy}>
-              {busy ? <Loader2 className="animate-spin" /> : null} Send OTP <ArrowRight />
-            </Button>
-          </form>
-        )}
-
-        {step === "otp" && (
-          <form
-            className="space-y-6"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (otp.length === 6) fakeWait(() => setStep("welcome"));
-            }}
-          >
             <div className="space-y-1.5">
-              <button
-                type="button"
-                onClick={() => setStep("phone")}
-                className="mb-2 inline-flex cursor-pointer items-center gap-1 rounded-full text-sm text-muted-foreground hover:text-foreground"
-              >
-                <ArrowLeft className="size-4" /> Change number
-              </button>
-              <h2 className="text-2xl font-semibold tracking-tight">Enter the OTP</h2>
-              <p className="text-sm text-muted-foreground">
-                Sent to <span className="tabular font-medium text-foreground">+91 {phone.slice(0, 5)} {phone.slice(5)}</span>
-              </p>
-            </div>
-            <OTPField.Root
-              value={otp}
-              onValueChange={setOtp}
-              validationType="numeric"
-              autoSubmit
-              onAutoSubmit={() => fakeWait(() => setStep("welcome"))}
-              className="flex justify-between gap-2"
-              aria-label="One-time password"
-            >
-              {Array.from({ length: 6 }).map((_, i) => (
-                <OTPField.Input
-                  key={i}
-                  className="tabular size-12 rounded-2xl border border-input bg-card text-center text-xl font-semibold shadow-soft outline-none focus:border-ring focus:ring-[3px] focus:ring-ring/25 sm:size-13"
+              <Label htmlFor="password">Password</Label>
+              <div className="relative">
+                <Lock className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
+                <Input
+                  ref={passRef}
+                  id="password"
+                  name="password"
+                  type={show ? "text" : "password"}
+                  autoComplete="current-password"
+                  required
+                  className="h-11 pr-11 pl-10"
+                  aria-invalid={!!state?.error}
                 />
-              ))}
-              <OTPField.HiddenInput name="otp" />
-            </OTPField.Root>
-            <Button type="submit" size="lg" className="w-full" disabled={otp.length !== 6 || busy}>
-              {busy ? <Loader2 className="animate-spin" /> : null} Verify & continue
-            </Button>
-            <p className="text-center text-sm text-muted-foreground">
-              {seconds > 0 ? (
-                <>
-                  Resend OTP in <span className="tabular">0:{String(seconds).padStart(2, "0")}</span>
-                </>
-              ) : (
-                <button type="button" className="cursor-pointer rounded-full font-medium text-primary hover:underline" onClick={() => setSeconds(30)}>
-                  Resend OTP
+                <button
+                  type="button"
+                  onClick={() => setShow((v) => !v)}
+                  className="absolute top-1/2 right-2 inline-flex size-8 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground"
+                  aria-label={show ? "Hide password" : "Show password"}
+                >
+                  {show ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                 </button>
-              )}
-            </p>
-          </form>
-        )}
-
-        {step === "welcome" && (
-          <div className="space-y-6 text-center">
-            <Avatar className="mx-auto size-20 ring-4 ring-accent">
-              <AvatarFallback className="text-xl">KS</AvatarFallback>
-            </Avatar>
-            <div className="space-y-1">
-              <h2 className="text-2xl font-semibold tracking-tight">Welcome, K. Srinivas</h2>
-              <p className="text-sm text-muted-foreground">Superintendent of Police · Demo District Police</p>
+              </div>
             </div>
-            <div className="flex flex-wrap justify-center gap-1.5">
-              {["Unit Officer", "Initiating Officer", "Component Officer", "Office Incharge"].map((r) => (
-                <Badge key={r} tone="primary">
-                  {r}
-                </Badge>
+            {state?.error && (
+              <p role="alert" className="rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger-soft-foreground">
+                {state.error}
+              </p>
+            )}
+            <Button type="submit" size="lg" className="h-11 w-full" disabled={pending}>
+              {pending ? <Loader2 className="animate-spin" /> : null} Sign in <ArrowRight />
+            </Button>
+          </form>
+          <p className="text-center text-xs text-muted-foreground">Forgot your password? Ask your Unit Officer to reset it.</p>
+        </CardContent>
+      </Card>
+
+      {demoAccounts && demoAccounts.length > 0 && (
+        <Card className="gap-2 rounded-2xl py-3">
+          <CardContent className="space-y-2 px-3">
+            <p className="text-xs font-medium text-muted-foreground">
+              Demo accounts (development only) · password <code className="rounded-md bg-muted px-1.5 py-0.5 text-foreground">{demoPassword}</code>
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {demoAccounts.map((a) => (
+                <button
+                  key={a.username}
+                  type="button"
+                  onClick={() => fill(a.username)}
+                  title={`${a.who} — ${a.role}`}
+                  className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-full border border-border bg-card px-3 text-xs hover:border-primary/40 hover:bg-accent"
+                >
+                  <span className="font-medium">{a.username}</span>
+                  <span className="text-muted-foreground">{a.role}</span>
+                </button>
               ))}
             </div>
-            <Button size="lg" className="w-full" asChild>
-              <Link href="/dashboard">
-                Continue to dashboard <ArrowRight />
-              </Link>
-            </Button>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 }

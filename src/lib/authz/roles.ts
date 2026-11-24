@@ -1,9 +1,10 @@
 /**
  * Roles from the two eDeployment manuals. A user can hold several roles at once
- * (each scoped to a unit / station / plan / component) and switches between them in the header.
+ * (each scoped to a unit / station / plan / component / department) and switches between them in the header.
  */
 export const ROLES = [
   "SUPER_ADMIN",
+  "DGP",
   "UNIT_OFFICER",
   "INITIATING_OFFICER",
   "COMPONENT_OFFICER",
@@ -17,6 +18,7 @@ export type Role = (typeof ROLES)[number];
 
 export const ROLE_LABEL: Record<Role, string> = {
   SUPER_ADMIN: "State Admin",
+  DGP: "DGP / Chief Office",
   UNIT_OFFICER: "Unit Officer",
   INITIATING_OFFICER: "Initiating Officer",
   COMPONENT_OFFICER: "Component Officer",
@@ -28,6 +30,7 @@ export const ROLE_LABEL: Record<Role, string> = {
 
 export const ROLE_SHORT: Record<Role, string> = {
   SUPER_ADMIN: "Admin",
+  DGP: "DGP",
   UNIT_OFFICER: "UO",
   INITIATING_OFFICER: "IO",
   COMPONENT_OFFICER: "CO",
@@ -36,3 +39,6 @@ export const ROLE_SHORT: Record<Role, string> = {
   EMPLOYEE: "Staff",
   PERSONNEL: "Personnel",
 };
+
+/** Default active role when a user signs in: the most senior role they hold. */
+export const ROLE_PRIORITY: Role[] = [...ROLES];

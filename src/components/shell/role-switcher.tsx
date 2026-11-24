@@ -6,7 +6,6 @@ import { ROLE_LABEL, ROLE_SHORT, type Role } from "@/lib/authz/roles";
 import { cn } from "@/lib/utils";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useRole } from "./role-context";
 
 /**
@@ -27,14 +26,9 @@ export function RoleSwitcher() {
         className="hidden xl:inline-flex"
       >
         {roles.map((r) => (
-          <Tooltip key={r}>
-            <TooltipTrigger asChild>
-              <ToggleGroupItem value={r} aria-label={ROLE_LABEL[r]}>
-                {ROLE_LABEL[r]}
-              </ToggleGroupItem>
-            </TooltipTrigger>
-            <TooltipContent>Act as {ROLE_LABEL[r]}</TooltipContent>
-          </Tooltip>
+          <ToggleGroupItem key={r} value={r} aria-label={ROLE_LABEL[r]} title={`Act as ${ROLE_LABEL[r]}`}>
+            {ROLE_LABEL[r]}
+          </ToggleGroupItem>
         ))}
       </ToggleGroup>
       <Select value={activeRole} onValueChange={(v) => setActiveRole(v as Role)}>

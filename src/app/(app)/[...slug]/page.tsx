@@ -6,13 +6,13 @@ import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { ALL_NAV_ITEMS } from "@/lib/nav";
+import { ALL_NAV_ITEMS, BUILT_PHASE } from "@/lib/nav";
 
 /**
  * Placeholder for navigation entries whose screens arrive in later phases (see docs/PLAN.md).
  * Keeps every sidebar link working while the app is built phase by phase.
  */
-const PLACEHOLDERS = ALL_NAV_ITEMS.filter((i) => i.phase > 1);
+const PLACEHOLDERS = ALL_NAV_ITEMS.filter((i) => i.phase > BUILT_PHASE);
 
 export function generateStaticParams() {
   return PLACEHOLDERS.map((i) => ({ slug: i.href.split("/").filter(Boolean) }));

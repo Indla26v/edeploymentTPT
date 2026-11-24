@@ -1,12 +1,14 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 
 import type { Role } from "@/lib/authz/roles";
 
 type RoleState = {
   roles: Role[];
   activeRole: Role;
+  permissions: ReadonlySet<string>;
   setActiveRole: (role: Role) => void;
 };
 
@@ -57,15 +59,18 @@ function writeRole(role: Role) {
 export function RoleProvider({
   roles,
   defaultRole,
+  permissions,
   onChange,
   children,
 }: {
   roles: Role[];
   defaultRole: Role;
+  permissions?: string[];
   /** Server action persisting the active role on the session; authz always re-reads it server-side. */
   onChange?: (role: Role) => Promise<void>;
   children: React.ReactNode;
 }) {
+  const router = useRouter();
   const saved = React.useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   // When a server action owns the active role, the server-provided default wins.
   const activeRole = !onChange && saved && (roles as string[]).includes(saved) ? (saved as Role) : defaultRole;
@@ -73,11 +78,17 @@ export function RoleProvider({
   const setActiveRole = React.useCallback(
     (role: Role) => {
       writeRole(role);
-      void onChange?.(role);
+      if (!onChange) return;
+      // The role changes what the whole app shows (menu, scope, data): go to the dashboard and re-render layouts.
+      void onChange(role).then(() => {
+        router.replace("/dashboard");
+        router.refresh();
+      });
     },
-    [onChange],
+    [onChange, router],
   );
-  const value = React.useMemo(() => ({ roles, activeRole, setActiveRole }), [roles, activeRole, setActiveRole]);
+  const permSet = React.useMemo(() => new Set(permissions ?? []), [permissions]);
+  const value = React.useMemo(() => ({ roles, activeRole, permissions: permSet, setActiveRole }), [roles, activeRole, permSet, setActiveRole]);
   return <RoleContext value={value}>{children}</RoleContext>;
 }
 

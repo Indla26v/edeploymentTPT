@@ -1,18 +1,16 @@
-import { AppShell, type ShellUser } from "@/components/shell/app-shell";
+import { Suspense } from "react";
+
+import { ShellSkeleton } from "@/components/shell/shell-skeleton";
+import { AuthedShell } from "./authed-shell";
 
 /**
- * Phase 1: a demo officer holding the four roles from Manual A p8.
- * Phase 2 replaces this with the signed-in user, read inside a <Suspense> boundary
- * (Cache Components: session reads must not block the static shell).
+ * The session is read at request time, so the whole signed-in area streams in behind this boundary
+ * (Cache Components: runtime data must not block the static shell).
  */
-const demoUser: ShellUser = {
-  name: "K. Srinivas",
-  designation: "Superintendent of Police",
-  unitName: "Demo District Police",
-  roles: ["UNIT_OFFICER", "INITIATING_OFFICER", "COMPONENT_OFFICER", "OFFICE_INCHARGE"],
-  defaultRole: "UNIT_OFFICER",
-};
-
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  return <AppShell user={demoUser}>{children}</AppShell>;
+  return (
+    <Suspense fallback={<ShellSkeleton />}>
+      <AuthedShell>{children}</AuthedShell>
+    </Suspense>
+  );
 }

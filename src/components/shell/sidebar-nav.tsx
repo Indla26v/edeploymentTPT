@@ -7,7 +7,7 @@ import { Collapsible } from "radix-ui";
 import { ChevronDown } from "lucide-react";
 
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { navForRole, type NavItem } from "@/lib/nav";
+import { navFor, type NavItem } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 import { useRole } from "./role-context";
 
@@ -51,8 +51,8 @@ function NavLink({ item, active, collapsed, onNavigate }: { item: NavItem; activ
 
 export function SidebarNav({ collapsed = false, onNavigate }: { collapsed?: boolean; onNavigate?: () => void }) {
   const pathname = usePathname();
-  const { activeRole } = useRole();
-  const groups = navForRole(activeRole);
+  const { activeRole, permissions } = useRole();
+  const groups = navFor(activeRole, permissions);
 
   return (
     <nav aria-label="Main" className={cn("flex flex-col", collapsed ? "items-center gap-2" : "gap-4")}>

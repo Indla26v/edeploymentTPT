@@ -12,8 +12,12 @@
 import { fakerEN_IN as faker } from "@faker-js/faker";
 import { eq, sql } from "drizzle-orm";
 
+import { insertUserWithPassword } from "../src/lib/auth/accounts";
+import { PERMISSIONS } from "../src/lib/authz/permissions";
+import type { Role } from "../src/lib/authz/roles";
 import { createDb } from "../src/lib/db/client";
-import { divisions, persons, ranks, stations, units } from "../src/lib/db/schema";
+import { divisions, permissions, persons, ranks, roleAssignments, rolePermissions, stations, units } from "../src/lib/db/schema";
+import { DEMO_PASSWORD } from "../src/lib/demo-accounts";
 import { scriptDatabaseUrl } from "./env";
 import { AGE_BAND, DEMO_UNIT, DIVISIONS, OTHER_UNITS, RANKS, SEED_REFERENCE_DATE } from "./seed-data";
 
@@ -46,7 +50,13 @@ export async function seed(url: string) {
   const { db, pool } = createDb(url, { max: 2 });
   try {
     await db.transaction(async (tx) => {
-      await tx.execute(sql`TRUNCATE persons, stations, divisions, units, ranks RESTART IDENTITY CASCADE`);
+      await tx.execute(
+        sql`TRUNCATE notifications_outbox, notifications, audit_log, role_permissions, permissions, role_assignments, rate_limits, verifications, sessions, accounts, users, persons, stations, divisions, units, ranks RESTART IDENTITY CASCADE`,
+      );
+
+      // Permission catalogue + default grants (editable later by the State Admin).
+      await tx.insert(permissions).values(PERMISSIONS.map((p) => ({ key: p.key, module: p.module, label: p.label })));
+      await tx.insert(rolePermissions).values(PERMISSIONS.flatMap((p) => p.roles.map((role) => ({ role, permissionKey: p.key }))));
 
       const rankRows = await tx.insert(ranks).values(RANKS.map((r) => ({ ...r }))).returning();
       const rankId = new Map(rankRows.map((r) => [r.code, r.id]));
@@ -110,7 +120,48 @@ export async function seed(url: string) {
         .limit(1);
       if (sp) await tx.update(units).set({ officerName: sp.name, officerPhone: sp.phone }).where(eq(units.id, demo!.id));
 
-      console.log(`Seeded ${rankRows.length} ranks, ${OTHER_UNITS.length + 1} units, ${DIVISIONS.length} divisions, ${order - 1} stations, ${total} persons.`);
+      // Demo logins (development only), linked to seeded officers.
+      const personBy = async (where: ReturnType<typeof sql>) =>
+        (await tx.execute<{ id: string; name: string; station_id: string }>(sql`select p.id, p.name, p.station_id from persons p join ranks r on r.id = p.rank_id join stations s on s.id = p.station_id where ${where} order by p.gen_no::int limit 1`)).rows[0];
+      const stationId = async (code: string) => (await tx.select({ id: stations.id }).from(stations).where(eq(stations.code, code)).limit(1))[0]!.id;
+      const inchargeOf = async (code: string) => personBy(sql`p.id = (select incharge_person_id from stations where code = ${code})`);
+
+      type Demo = { username: string; person?: { id: string; name: string } | undefined; name?: string; roles: { role: Role; stationCode?: string }[] };
+      const demos: Demo[] = [
+        { username: "admin", name: "State Administrator", roles: [{ role: "SUPER_ADMIN" }] },
+        { username: "sp", person: await personBy(sql`r.code = 'SP'`), roles: [{ role: "UNIT_OFFICER" }, { role: "INITIATING_OFFICER" }] },
+        { username: "addlsp", person: await personBy(sql`r.code = 'Addl.SP'`), roles: [{ role: "INITIATING_OFFICER" }] },
+        { username: "dsp1", person: await personBy(sql`r.code = 'DSP'`), roles: [{ role: "COMPONENT_OFFICER" }] },
+        { username: "dsp2", person: await personBy(sql`r.code = 'DSP' and p.gen_no::int > (select min(gen_no::int) from persons p2 join ranks r2 on r2.id = p2.rank_id where r2.code = 'DSP')`), roles: [{ role: "COMPONENT_OFFICER" }] },
+        { username: "sho.town1", person: await inchargeOf("PS-T1"), roles: [{ role: "OFFICE_INCHARGE", stationCode: "PS-T1" }] },
+        { username: "sho.town2", person: await inchargeOf("PS-T2"), roles: [{ role: "OFFICE_INCHARGE", stationCode: "PS-T2" }] },
+        { username: "sho.rural", person: await inchargeOf("PS-RUR"), roles: [{ role: "OFFICE_INCHARGE", stationCode: "PS-RUR" }] },
+        { username: "om", person: await personBy(sql`r.code = 'SI' and s.code = 'DPO'`), roles: [{ role: "OFFICE_MANAGER" }] },
+        { username: "staff1", person: await personBy(sql`r.code = 'HC' and s.code = 'DPO'`), roles: [{ role: "EMPLOYEE" }] },
+        { username: "pc1015", person: await personBy(sql`p.gen_no = '1015'`), roles: [{ role: "PERSONNEL" }] },
+      ];
+      for (const d of demos) {
+        const { userId } = await insertUserWithPassword(tx, {
+          username: d.username,
+          name: d.person?.name ?? d.name ?? d.username,
+          personId: d.person?.id ?? null,
+          password: DEMO_PASSWORD,
+          mustChangePassword: false,
+        });
+        for (const r of d.roles) {
+          const state = r.role === "SUPER_ADMIN" || r.role === "DGP";
+          await tx.insert(roleAssignments).values({
+            userId,
+            role: r.role,
+            unitId: state ? null : demo!.id,
+            stationId: r.stationCode ? await stationId(r.stationCode) : null,
+          });
+        }
+      }
+
+      console.log(
+        `Seeded ${rankRows.length} ranks, ${OTHER_UNITS.length + 1} units, ${DIVISIONS.length} divisions, ${order - 1} stations, ${total} persons, ${PERMISSIONS.length} permissions, ${demos.length} demo users.`,
+      );
     });
   } finally {
     await pool.end();
