@@ -35,3 +35,5 @@ export const forceRequestKind = pgEnum("force_request_kind", ["initial", "top_up
 /** sent → committed (full) | partial (short, with reason) | declined (none) | auto_accepted (deadline passed) | cancelled */
 export const forceRequestStatus = pgEnum("force_request_status", ["sent", "committed", "partial", "declined", "auto_accepted", "cancelled"]);
 export const personnelSource = pgEnum("personnel_source", ["nominal_roll", "preference", "manual"]);
+
+export const assignmentSource = pgEnum("assignment_source", ["suggested", "manual", "preference"]);

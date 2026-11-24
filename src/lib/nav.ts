@@ -116,7 +116,7 @@ export const NAV: NavGroup[] = [
 export const ALL_NAV_ITEMS: NavItem[] = NAV.flatMap((g) => g.items);
 
 /** Highest delivery phase whose screens exist; later nav items render the "coming in phase N" card. */
-export const BUILT_PHASE = 5;
+export const BUILT_PHASE = 6;
 
 export function navFor(role: Role, permissions: ReadonlySet<string>): NavGroup[] {
   return NAV.map((g) => ({

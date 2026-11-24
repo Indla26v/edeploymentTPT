@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { check, index, integer, jsonb, numeric, pgTable, smallint, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, check, index, integer, jsonb, numeric, pgTable, smallint, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 
 import { users } from "./auth";
 import { componentStatus, genderReq, intensity, mobility, planStatus, preferenceKind, preferenceStatus, reportingKind, slotRole } from "./enums";
@@ -38,6 +38,10 @@ export const plans = pgTable(
     initiatedBy: uuid().references(() => users.id, { onDelete: "set null" }),
     reusedFromPlanId: uuid(),
     sentToUoAt: timestamp({ withTimezone: true }),
+    /** Bumped on every placement-board change; stale writes are refused (concurrent editing). */
+    placementVersion: integer().notNull().default(0),
+    publishedVersion: integer().notNull().default(0),
+    publishedAt: timestamp({ withTimezone: true }),
     ...ts,
   },
   (t) => [uniqueIndex("plans_unit_code_uq").on(t.unitId, t.code), index("plans_unit_status_idx").on(t.unitId, t.status)],
@@ -86,6 +90,8 @@ export const planComponents = pgTable(
     logisticsNote: text(),
     returnComment: text(),
     submittedAt: timestamp({ withTimezone: true }),
+    /** CO marks the component's placement done; the IO publishes. */
+    placementReadyAt: timestamp({ withTimezone: true }),
     displayOrder: integer().notNull().default(0),
     ...ts,
   },
@@ -191,6 +197,8 @@ export const slots = pgTable(
     priority: smallint().notNull().default(3),
     intensity: intensity().notNull().default("medium"),
     genderReq: genderReq().notNull().default("any"),
+    /** CO decided to leave this slot unfilled (e.g. after an accepted shortfall). */
+    dropped: boolean().notNull().default(false),
   },
   (t) => [index("slots_plan_idx").on(t.planId), index("slots_component_idx").on(t.planComponentId), index("slots_sector_idx").on(t.sectorId)],
 );

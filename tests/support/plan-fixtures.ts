@@ -57,3 +57,33 @@ export async function planInSourcing(db: Db, opts: { title: string; day: string;
   ok(await sendToUoAction(planId));
   return { planId, componentId: comp!.id, rank };
 }
+
+/** Continues planInSourcing: Town I PS gives everything, names officers, and the plan moves to placement. */
+export async function planInPlacement(db: Db, opts: { title: string; day: string; pc: number; hc: number }) {
+  const base = await planInSourcing(db, opts);
+  const { sendRequestsAction, proceedToPlacementAction } = await import("@/app/(app)/plans/[planId]/sourcing/actions");
+  const { respondAction, saveRollAction } = await import("@/app/(app)/station/requests/actions");
+  const { forceRequests, persons, stations } = await import("@/lib/db/schema");
+  const { and, sql } = await import("drizzle-orm");
+  const [t1] = await db.select({ id: stations.id, incharge: stations.inchargePersonId }).from(stations).where(eq(stations.code, "PS-T1"));
+  const need = { PC: opts.pc, HC: opts.hc, SI: 1 };
+  await actAs(db, "sp", "UNIT_OFFICER");
+  ok(await sendRequestsAction(base.planId, { deadlineAt: new Date(Date.now() + 3600e3).toISOString(), note: null, kind: "initial", grid: [{ stationId: t1!.id, lines: Object.entries(need).map(([code, n]) => ({ rankId: base.rank.get(code)!, requested: n })) }] }));
+  const [req] = await db.select().from(forceRequests).where(eq(forceRequests.planId, base.planId));
+  await actAs(db, "sho.town1");
+  ok(await respondAction(req!.id, { lines: Object.entries(need).map(([code, n]) => ({ rankId: base.rank.get(code)!, committed: n, reason: null })), shortReason: null }));
+  const named: string[] = [];
+  for (const [code, n] of Object.entries(need)) {
+    const rows = await db
+      .select({ id: persons.id })
+      .from(persons)
+      .where(and(eq(persons.stationId, t1!.id), eq(persons.rankId, base.rank.get(code)!), eq(persons.availability, "available"), sql`${persons.id} <> ${t1!.incharge}`, sql`${persons.id} not in (select person_id from plan_personnel)`))
+      .orderBy(persons.genNo)
+      .limit(n);
+    named.push(...rows.map((r) => r.id));
+  }
+  ok(await saveRollAction(req!.id, named));
+  await actAs(db, "sp", "UNIT_OFFICER");
+  ok(await proceedToPlacementAction(base.planId));
+  return { ...base, named };
+}

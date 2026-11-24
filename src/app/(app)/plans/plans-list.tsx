@@ -14,6 +14,7 @@ import { fmtDateTime, fmtRange, fmtRelative } from "@/lib/format";
 import type { PlanListRow } from "@/lib/queries/plans";
 
 function nextStep(r: PlanListRow, role: Role): { label: string; href: string } {
+  if ((r.status === "placement" || r.status === "published") && (role === "COMPONENT_OFFICER" || role === "INITIATING_OFFICER")) return { label: r.status === "placement" ? "Place officers" : "Placement", href: `/plans/${r.id}/placement` };
   if (role === "COMPONENT_OFFICER" && r.myComponentId) {
     const mine = r.myComponentStatus;
     return { label: mine === "submitted" || mine === "accepted" ? "View proposal" : mine === "returned" ? "Fix and resubmit" : "Propose", href: `/plans/${r.id}/components/${r.myComponentId}` };

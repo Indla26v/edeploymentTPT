@@ -27,7 +27,7 @@ export async function planRange(db: DbOrTx, planId: string): Promise<{ start: Da
  */
 export async function planLedger(db: DbOrTx, planId: string, now = new Date()): Promise<LedgerRow[]> {
   // Sequential on purpose: `db` may be a transaction (one connection — no concurrent queries).
-  const req = await db.select({ rankId: slots.rankId, n: sql<number>`count(*)`.mapWith(Number) }).from(slots).where(eq(slots.planId, planId)).groupBy(slots.rankId);
+  const req = await db.select({ rankId: slots.rankId, n: sql<number>`count(*)`.mapWith(Number) }).from(slots).where(and(eq(slots.planId, planId), eq(slots.dropped, false))).groupBy(slots.rankId);
   const lines = await db
       .select({ rankId: forceRequestLines.rankId, requested: forceRequestLines.requested, committed: forceRequestLines.committed, status: forceRequests.status, kind: forceRequests.kind, deadlineAt: forceRequests.deadlineAt })
       .from(forceRequestLines)

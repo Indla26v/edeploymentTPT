@@ -105,6 +105,12 @@ export async function getAttention(user: CurrentUser, unitId: string, stationIds
     user.activeRole === "UNIT_OFFICER" ? planCount("sourcing") : 0,
     user.activeRole === "INITIATING_OFFICER" ? planCount("draft") : 0,
   ]);
+  const toPlace =
+    user.activeRole === "COMPONENT_OFFICER"
+      ? (await db.select({ n: count() }).from(planComponents).innerJoin(plans, eq(plans.id, planComponents.planId)).where(and(eq(planComponents.coUserId, user.id), eq(plans.status, "placement"), isNull(planComponents.placementReadyAt))))[0]!.n
+      : user.activeRole === "INITIATING_OFFICER"
+        ? await planCount("placement")
+        : 0;
   let toAnswer = 0;
   let toName = 0;
   if (user.activeRole === "OFFICE_INCHARGE" && stationIds?.length) {
@@ -125,5 +131,5 @@ export async function getAttention(user: CurrentUser, unitId: string, stationIds
     db.select({ n: count() }).from(stations).where(and(eq(stations.unitId, unitId), isNull(stations.inchargePersonId))),
     db.select({ n: count() }).from(deploymentPoints).where(and(eq(deploymentPoints.unitId, unitId), eq(deploymentPoints.isActive, true))),
   ]);
-  return { pendingTransfers: transfers!.n, stationsWithoutIncharge: noIncharge!.n, points: points!.n, myProposals, toConsolidate, toSource, drafts, toAnswer, toName };
+  return { pendingTransfers: transfers!.n, stationsWithoutIncharge: noIncharge!.n, points: points!.n, myProposals, toConsolidate, toSource, drafts, toAnswer, toName, toPlace };
 }

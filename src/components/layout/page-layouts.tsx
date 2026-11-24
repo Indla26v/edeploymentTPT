@@ -83,7 +83,7 @@ export function BoardLayout({
     <div className={cn("flex flex-col gap-3 lg:h-[calc(100dvh-9rem)]", className)}>
       {toolbar}
       <div
-        className="grid min-h-0 flex-1 gap-3 lg:grid-cols-[var(--side)_1fr]"
+        className="grid min-h-0 flex-1 grid-cols-1 gap-3 lg:grid-cols-[var(--side)_1fr]"
         style={{ "--side": sideWidth } as React.CSSProperties}
       >
         {side && <aside className="min-h-0 lg:overflow-y-auto">{side}</aside>}

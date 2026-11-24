@@ -114,6 +114,53 @@ test.describe("plan → propose → consolidate (UI)", () => {
     await expect(uo.getByText("Law & Order E2E").first()).toBeVisible();
     await expect(uo.getByRole("row").filter({ hasText: "Law & Order E2E" }).getByText("Accepted")).toBeVisible();
     await uoCtx.close();
+
+    // 7. Component Officer: suggest, leave the two short PC slots unfilled, mark ready
+    const co2Ctx = await browser.newContext({ storageState: authFile("dsp1") });
+    const co2 = await co2Ctx.newPage();
+    await co2.goto(`${planUrl}/placement`);
+    await co2.waitForLoadState("networkidle");
+    await expect(co2.getByText("0 / 7 placed")).toBeVisible();
+    // Drag the SI from the pool onto the sector-incharge slot, undo it, then place via the keyboard path.
+    const handle = co2.locator("aside").getByRole("button", { name: /^Drag / }).first();
+    const target = co2.getByText("SI", { exact: true }).locator("xpath=ancestor::div[contains(@class,'border-dashed')][1]").first();
+    const hb = (await handle.boundingBox())!;
+    const tb = (await target.boundingBox())!;
+    await co2.mouse.move(hb.x + hb.width / 2, hb.y + hb.height / 2);
+    await co2.mouse.down();
+    await co2.mouse.move(hb.x + 20, hb.y + 20, { steps: 5 });
+    await co2.mouse.move(tb.x + tb.width / 2, tb.y + tb.height / 2, { steps: 15 });
+    await co2.mouse.up();
+    await expect(co2.getByText("1 / 7 placed")).toBeVisible();
+    await co2.getByRole("button", { name: "Undo" }).click();
+    await expect(co2.getByText("0 / 7 placed")).toBeVisible();
+    await co2.locator("aside").getByRole("button", { name: /^Place .* in…$/ }).first().click();
+    await co2.getByRole("dialog").getByRole("button").filter({ hasText: "Sector" }).first().click();
+    await expect(co2.getByText("1 / 7 placed")).toBeVisible();
+    await co2.getByRole("button", { name: "Suggest" }).click();
+    await expect(co2.getByText("5 / 7 placed")).toBeVisible();
+    for (let i = 0; i < 2; i++) {
+      await co2.getByRole("button", { name: "Leave unfilled" }).first().click();
+      await expect(co2.getByText(`5 / ${6 - i} placed`)).toBeVisible();
+    }
+    // Nothing has been sent to officers yet.
+    const before = await dbQuery<{ n: number }>("select count(*)::int n from notifications_outbox where template like 'duty.%' and payload->>'plan' = $1", [title]);
+    expect(before[0]!.n).toBe(0);
+    await co2.getByRole("button", { name: "Mark ready" }).click();
+    await expect(co2.getByText(/Marked ready/)).toBeVisible();
+    await co2Ctx.close();
+
+    // 8. Initiating Officer publishes — every placed officer is notified once
+    const io2Ctx = await browser.newContext({ storageState: authFile("addlsp") });
+    const io2 = await io2Ctx.newPage();
+    await io2.goto(`${planUrl}/placement`);
+    await io2.waitForLoadState("networkidle");
+    await io2.getByRole("button", { name: "Publish" }).first().click();
+    await io2.getByRole("dialog").getByRole("button", { name: "Publish" }).click();
+    await expect(io2.getByText("5 officers notified")).toBeVisible();
+    const after = await dbQuery<{ n: number }>("select count(*)::int n from notifications_outbox where template like 'duty.%' and payload->>'plan' = $1", [title]);
+    expect(after[0]!.n).toBe(5);
+    await io2Ctx.close();
   });
 });
 

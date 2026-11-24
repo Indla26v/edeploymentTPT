@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { connection } from "next/server";
-import { ArrowRight, ClipboardList, Layers, Pencil, Users } from "lucide-react";
+import { ArrowRight, ClipboardList, Layers, LayoutGrid, Pencil, Users } from "lucide-react";
 
 import { AccessDenied } from "@/components/access-denied";
 import { DetailPage, SummaryStrip } from "@/components/layout/page-layouts";
@@ -78,6 +78,13 @@ async function Plan({ params }: PageProps<"/plans/[planId]">) {
             <Button size="sm" variant={status === "sourcing" && can(user, "force.distribute") && user.activeRole === "UNIT_OFFICER" ? "default" : "outline"} asChild>
               <Link href={`/plans/${plan.id}/sourcing`}>
                 <Users /> {status === "sourcing" && can(user, "force.distribute") && user.activeRole === "UNIT_OFFICER" ? "Distribute force" : "Sourcing"}
+              </Link>
+            </Button>
+          )}
+          {["placement", "published", "live", "completed"].includes(status) && (
+            <Button size="sm" variant={status === "placement" && (isIo || !!mine) ? "default" : "outline"} asChild>
+              <Link href={`/plans/${plan.id}/placement`}>
+                <LayoutGrid /> {status === "placement" && (isIo || !!mine) ? "Place officers" : "Placement"}
               </Link>
             </Button>
           )}

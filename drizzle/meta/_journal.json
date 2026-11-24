@@ -43,6 +43,13 @@
       "when": 1795521714293,
       "tag": "0005_sourcing",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795523005167,
+      "tag": "0006_placement",
+      "breakpoints": true
     }
   ]
 }
