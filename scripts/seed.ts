@@ -19,6 +19,7 @@ import { createDb } from "../src/lib/db/client";
 import { divisions, permissions, persons, ranks, roleAssignments, rolePermissions, stations, units } from "../src/lib/db/schema";
 import { DEMO_PASSWORD } from "../src/lib/demo-accounts";
 import { scriptDatabaseUrl } from "./env";
+import { seedMasters } from "./seed-masters";
 import { AGE_BAND, DEMO_UNIT, DIVISIONS, OTHER_UNITS, RANKS, SEED_REFERENCE_DATE } from "./seed-data";
 
 if (process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production") {
@@ -140,6 +141,7 @@ export async function seed(url: string) {
         { username: "staff1", person: await personBy(sql`r.code = 'HC' and s.code = 'DPO'`), roles: [{ role: "EMPLOYEE" }] },
         { username: "pc1015", person: await personBy(sql`p.gen_no = '1015'`), roles: [{ role: "PERSONNEL" }] },
       ];
+      const userIdOf = new Map<string, string>();
       for (const d of demos) {
         const { userId } = await insertUserWithPassword(tx, {
           username: d.username,
@@ -148,6 +150,7 @@ export async function seed(url: string) {
           password: DEMO_PASSWORD,
           mustChangePassword: false,
         });
+        userIdOf.set(d.username, userId);
         for (const r of d.roles) {
           const state = r.role === "SUPER_ADMIN" || r.role === "DGP";
           await tx.insert(roleAssignments).values({
@@ -159,8 +162,10 @@ export async function seed(url: string) {
         }
       }
 
+      const m = await seedMasters(tx, demo!.id, userIdOf.get("sho.town1") ?? null);
+
       console.log(
-        `Seeded ${rankRows.length} ranks, ${OTHER_UNITS.length + 1} units, ${DIVISIONS.length} divisions, ${order - 1} stations, ${total} persons, ${PERMISSIONS.length} permissions, ${demos.length} demo users.`,
+        `Seeded ${m.points} deployment points, ${m.stock} equipment stock rows; ${rankRows.length} ranks, ${OTHER_UNITS.length + 1} units, ${DIVISIONS.length} divisions, ${order - 1} stations, ${total} persons, ${PERMISSIONS.length} permissions, ${demos.length} demo users.`,
       );
     });
   } finally {

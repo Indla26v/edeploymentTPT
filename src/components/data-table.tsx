@@ -25,7 +25,7 @@ export type FilterGroup<T> = {
   id: string;
   label?: string;
   options: { value: string; label: string; count?: number }[];
-  /** Multi-select pills; a row passes when any selected value matches. */
+  /** Up to 4 options: multi-select pills. More: a compact single-choice dropdown. A row passes when any selected value matches. */
   match: (row: T, value: string) => boolean;
 };
 
@@ -146,19 +146,43 @@ export function DataTable<T>({
                 />
               </label>
             )}
-            {filters.map((g) => (
-              <div key={g.id} className="flex flex-wrap items-center gap-1.5" role="group" aria-label={g.label ?? g.id}>
-                {g.label && <span className="text-xs text-muted-foreground">{g.label}</span>}
-                {g.options.map((o) => (
-                  <FilterPill key={o.value} active={(prefs.filters[g.id] ?? []).includes(o.value)} onClick={() => toggleFilter(g.id, o.value)}>
-                    {o.label}
-                    {o.count !== undefined && <span className="tabular opacity-70">{o.count}</span>}
-                  </FilterPill>
-                ))}
-              </div>
-            ))}
+            {filters.map((g) =>
+              g.options.length > 4 ? (
+                <Select
+                  key={g.id}
+                  value={(prefs.filters[g.id] ?? [])[0] ?? "__all__"}
+                  onValueChange={(v) => {
+                    setPrefs({ ...prefs, filters: { ...prefs.filters, [g.id]: v === "__all__" ? [] : [v] } });
+                    setPageIndex(0);
+                  }}
+                >
+                  <SelectTrigger size="sm" className="h-9 w-full rounded-full sm:w-52" aria-label={`Filter by ${g.label ?? g.id}`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All {g.label ?? g.id}</SelectItem>
+                    {g.options.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>
+                        {o.label}
+                        {o.count !== undefined && <span className="tabular ml-1 text-muted-foreground">{o.count}</span>}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div key={g.id} className="flex flex-wrap items-center gap-1.5" role="group" aria-label={g.label ?? g.id}>
+                  {g.label && <span className="text-xs text-muted-foreground">{g.label}</span>}
+                  {g.options.map((o) => (
+                    <FilterPill key={o.value} active={(prefs.filters[g.id] ?? []).includes(o.value)} onClick={() => toggleFilter(g.id, o.value)}>
+                      {o.label}
+                      {o.count !== undefined && <span className="tabular opacity-70">{o.count}</span>}
+                    </FilterPill>
+                  ))}
+                </div>
+              ),
+            )}
           </div>
-          {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
+          {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
         </div>
       )}
 

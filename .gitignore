@@ -50,3 +50,6 @@ next-env.d.ts
 /playwright/.cache/
 /artifacts/
 /playwright/.auth/
+
+# local uploads (dev storage adapter)
+/.data/

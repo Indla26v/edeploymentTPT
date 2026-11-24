@@ -67,6 +67,7 @@ export async function mutate<S extends z.ZodType, R>(opts: {
     if (err instanceof UserError || err instanceof AuthzError) return { ok: false, error: err.message };
     if (isUniqueViolation(err)) return { ok: false, error: "That record already exists." };
     if (isExclusionViolation(err)) return { ok: false, error: "That officer is already booked on an overlapping bandobast." };
+    if (isForeignKeyViolation(err)) return { ok: false, error: "This record is in use elsewhere, so it can't be removed." };
     console.error("mutation failed", err);
     return { ok: false, error: "Something went wrong. Please try again." };
   }
@@ -95,6 +96,9 @@ function pgCode(err: unknown): string | undefined {
 }
 export function isUniqueViolation(err: unknown) {
   return pgCode(err) === "23505";
+}
+export function isForeignKeyViolation(err: unknown) {
+  return pgCode(err) === "23503";
 }
 export function isExclusionViolation(err: unknown) {
   return pgCode(err) === "23P01";

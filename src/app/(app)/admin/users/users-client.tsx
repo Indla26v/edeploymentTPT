@@ -302,7 +302,7 @@ export function UsersClient({ rows, scopes, grantable, selfId }: { rows: UserRow
         searchText={(r) => `${r.name} ${r.username} ${r.person?.genNo ?? ""} ${r.person?.station ?? ""}`}
         filters={[
           {
-            id: "role",
+            id: "roles",
             options: grantable.filter((r) => roleCounts.get(r)).map((r) => ({ value: r, label: ROLE_SHORT[r], count: roleCounts.get(r) })),
             match: (row, v) => row.assignments.some((a) => a.role === v),
           },

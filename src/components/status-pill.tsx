@@ -34,6 +34,8 @@ export const STATUS_META = {
   short: { label: "Short", tone: "warning", icon: TriangleAlert },
   shortfall_accepted: { label: "Shortfall accepted", tone: "neutral", icon: MinusCircle },
   declined: { label: "Declined", tone: "danger", icon: XCircle },
+  approved: { label: "Approved", tone: "success", icon: CircleCheck },
+  rejected: { label: "Rejected", tone: "danger", icon: XCircle },
   returned: { label: "Returned", tone: "warning", icon: RotateCcw },
   overdue: { label: "Overdue", tone: "danger", icon: TriangleAlert },
   suggested: { label: "Suggested", tone: "primary", icon: Sparkles },

@@ -10,6 +10,7 @@ import { persons, ranks, roleAssignments, rolePermissions, stations, units, user
 import type { PermissionKey } from "../authz/permissions";
 import { ROLE_PRIORITY, type Role } from "../authz/roles";
 import { getAuth } from "./server";
+import type { DbOrTx } from "./accounts";
 
 export type Assignment = {
   id: string;
@@ -44,7 +45,12 @@ export type CurrentUser = {
 export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const session = await getAuth().api.getSession({ headers: await headers() });
   if (!session) return null;
-  const db = getDb();
+  const requested = (session.session as { activeRole?: string | null }).activeRole as Role | null | undefined;
+  return loadUser(getDb(), session.user.id, requested ?? null, session.session.token);
+});
+
+/** Builds the CurrentUser (roles, scope, permissions) for a user id. Exported for tests and background jobs. */
+export async function loadUser(db: DbOrTx, userId: string, requested: Role | null, sessionToken = ""): Promise<CurrentUser | null> {
 
   const [row] = await db
     .select({
@@ -61,7 +67,7 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     .from(users)
     .leftJoin(persons, eq(persons.id, users.personId))
     .leftJoin(ranks, eq(ranks.id, persons.rankId))
-    .where(eq(users.id, session.user.id))
+    .where(eq(users.id, userId))
     .limit(1);
   if (!row || !row.isActive) return null;
 
@@ -79,7 +85,6 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     .where(and(eq(roleAssignments.userId, row.id), eq(roleAssignments.isActive, true)))) as Assignment[];
 
   const roles = ROLE_PRIORITY.filter((r) => all.some((a) => a.role === r));
-  const requested = (session.session as { activeRole?: string | null }).activeRole as Role | null | undefined;
   const activeRole: Role = requested && roles.includes(requested) ? requested : (roles[0] ?? "PERSONNEL");
   const assignments = all.filter((a) => a.role === activeRole);
 
@@ -112,14 +117,14 @@ export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
     unitName,
     stationId,
     mustChangePassword: row.mustChangePassword,
-    sessionToken: session.session.token,
+    sessionToken,
     roles,
     activeRole,
     assignments,
     allAssignments: all,
     permissions: new Set(perms.map((p) => p.key as PermissionKey)),
   };
-});
+}
 
 /** Use in pages/layouts: redirects to login when signed out, and to the password page when a change is required. */
 export async function requireUser(opts: { allowPasswordChange?: boolean } = {}): Promise<CurrentUser> {

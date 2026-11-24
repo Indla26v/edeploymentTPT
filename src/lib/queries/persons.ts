@@ -9,7 +9,7 @@ import { stationScope, unitScope } from "@/lib/authz/scoped";
 import type { PersonOption } from "@/components/pickers/person-picker";
 
 /** Officer search for pickers, always limited to the caller's unit / station scope. */
-export async function searchPersons(user: CurrentUser, q: string, opts: { limit?: number; rankCodes?: string[] } = {}): Promise<PersonOption[]> {
+export async function searchPersons(user: CurrentUser, q: string, opts: { limit?: number; rankCodes?: string[]; stationId?: string } = {}): Promise<PersonOption[]> {
   const term = q.trim();
   const rows = await getDb()
     .select({ id: persons.id, name: persons.name, rank: ranks.code, genNo: persons.genNo, station: stations.name, phone: persons.phone })
@@ -22,6 +22,7 @@ export async function searchPersons(user: CurrentUser, q: string, opts: { limit?
         unitScope(user, persons.unitId),
         stationScope(user, persons.stationId),
         term ? or(ilike(persons.name, `%${term}%`), ilike(persons.genNo, `${term}%`), ilike(persons.phone, `%${term}%`)) : sql`true`,
+        opts.stationId ? eq(persons.stationId, opts.stationId) : sql`true`,
         opts.rankCodes?.length ? sql`${ranks.code} = any(${opts.rankCodes})` : sql`true`,
       ),
     )

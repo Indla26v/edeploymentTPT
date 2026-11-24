@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { connection } from "next/server";
-import { Building2, Database, HeartPulse, UserCheck, Users } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, BellRing, Building2, Database, HeartPulse, UserCheck, Users } from "lucide-react";
 
 import { EmptyState } from "@/components/empty-state";
 import { KpiCard } from "@/components/kpi-card";
@@ -13,7 +14,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { requireUser } from "@/lib/auth/session";
 import { ROLE_LABEL } from "@/lib/authz/roles";
-import { getStateOverview, getUnitDashboard } from "@/lib/queries/dashboard";
+import { getAttention, getStateOverview, getUnitDashboard } from "@/lib/queries/dashboard";
+import { can, scopeStationIds } from "@/lib/authz/authorize";
 import { formatNumber } from "@/lib/utils";
 
 export const metadata: Metadata = { title: "Dashboard" };
@@ -34,8 +36,10 @@ async function DashboardData() {
   const user = await requireUser();
   if (!user.unitId) return <StateOverview />;
   let data: Awaited<ReturnType<typeof getUnitDashboard>>;
+  let attention: Awaited<ReturnType<typeof getAttention>>;
+  const stationIds = scopeStationIds(user);
   try {
-    data = await getUnitDashboard(user.unitId);
+    [data, attention] = await Promise.all([getUnitDashboard(user.unitId, stationIds), getAttention(user.unitId, stationIds)]);
   } catch (err) {
     console.error("dashboard query failed", err);
     return (
@@ -53,8 +57,28 @@ async function DashboardData() {
   const { totals, byRank, stations } = data;
   const availablePct = totals.persons ? Math.round((totals.available / totals.persons) * 100) : 0;
 
+  const actions: { label: string; href: string; tone: "warning" | "info" }[] = [];
+  if (attention.pendingTransfers && can(user, "transfers.approve")) actions.push({ label: `${attention.pendingTransfers} transfer request${attention.pendingTransfers > 1 ? "s" : ""} to review`, href: "/masters/transfers", tone: "warning" });
+  else if (attention.pendingTransfers && can(user, "transfers.request")) actions.push({ label: `${attention.pendingTransfers} transfer request${attention.pendingTransfers > 1 ? "s" : ""} awaiting approval`, href: "/masters/transfers", tone: "info" });
+  if (attention.stationsWithoutIncharge && can(user, "masters.stations.manage")) actions.push({ label: `${attention.stationsWithoutIncharge} station${attention.stationsWithoutIncharge > 1 ? "s" : ""} without an Office Incharge`, href: "/masters/stations", tone: "warning" });
+  if (attention.points === 0 && can(user, "masters.points.manage")) actions.push({ label: "Add your deployment points library", href: "/masters/points", tone: "info" });
+
   return (
     <div className="space-y-4">
+      {actions.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-card px-4 py-2.5 shadow-soft">
+          <span className="flex items-center gap-1.5 text-sm font-medium">
+            <BellRing className="size-4 text-warning" aria-hidden /> Needs attention
+          </span>
+          {actions.map((a) => (
+            <Link key={a.href + a.label} href={a.href} className="rounded-full focus-visible:ring-2 focus-visible:ring-ring">
+              <Badge tone={a.tone} className="h-7 px-3 text-xs hover:brightness-95">
+                {a.label} <ArrowRight className="size-3" aria-hidden />
+              </Badge>
+            </Link>
+          ))}
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <KpiCard label="Police stations / offices" value={totals.stations} icon={Building2} />
         <KpiCard label="Police persons" value={totals.persons} icon={Users} tone="info" hint={`${formatNumber(totals.women)} women officers`} />
