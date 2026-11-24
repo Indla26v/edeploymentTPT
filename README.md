@@ -28,14 +28,18 @@ Sidebar entries for later phases open a "coming in phase N" card, so you can nav
 ## Stack
 
 - Next.js 16 (App Router; Cache Components and Partial Prefetching enabled), TypeScript (strict)
-- PostgreSQL with Drizzle ORM (`pg` driver): Neon (Mumbai) in the cloud, Postgres 16 locally and in CI
+- PostgreSQL with Drizzle ORM (`pg` driver): Neon (Singapore) in the cloud, Postgres 16 locally and in CI
 - Tailwind CSS v4, Radix primitives, and shadcn-style components written for this design (pill buttons, rounded surfaces, light/dark)
 - TanStack Table, dnd-kit, react-hook-form + zod, sonner
 - Vitest (unit tests plus a real-Postgres suite), Playwright (desktop and phone smoke tests)
 
 ## Getting started
 
-Requires Node 22, pnpm 10 and PostgreSQL 16 locally. To develop against a Neon branch instead, see [Database: Neon Postgres](#database-neon-postgres).
+Requires Node 22 and pnpm 10, plus either a Neon `dev` branch connection string (easiest) or a local PostgreSQL 16.
+
+**With Neon (recommended):** put the `dev` branch URLs in `.env.local` as `DATABASE_URL` / `DATABASE_URL_UNPOOLED`. The branch is already migrated and seeded, so you can run `pnpm install && pnpm dev` straight away.
+
+**With local Postgres:**
 
 ```bash
 pnpm install
@@ -53,7 +57,16 @@ Useful pages:
 
 ## Database: Neon Postgres
 
-Production and preview deployments use **Neon** (serverless Postgres). Local development and CI use plain Postgres 16. The code is the same for both; only the connection URLs differ.
+Production and preview deployments use **Neon** (serverless Postgres). CI uses plain Postgres 16. Local development can use either one. The code is the same for both; only the connection URLs differ.
+
+**Current Neon project:** `edeployment` (id `bold-glitter-41655874`), Postgres 16, region **AWS Singapore (`aws-ap-southeast-1`)**. Mumbai isn't offered on this Neon account.
+
+| Branch | Contents | Use |
+|---|---|---|
+| `main` | schema only | production (via Vercel env vars) |
+| `dev` | schema plus the fictional Demo District (12 stations, 400 officers) | local development |
+
+Connection strings are never committed. Copy them from the Neon console (**Project → Branch → Connect**) into `.env.local`.
 
 | Variable | Neon value | Used by |
 |---|---|---|
@@ -70,7 +83,7 @@ How the app handles Neon (`src/lib/db/`):
 
 ### Set it up on Vercel
 
-1. In the Vercel project, go to **Storage → Create → Neon**. Pick region **AWS Asia Pacific (Mumbai) – ap-south-1** and connect it to *Production*, *Preview* and *Development*. This sets `DATABASE_URL` and `DATABASE_URL_UNPOOLED`.
+1. In the Vercel project, add `DATABASE_URL` (pooled) and `DATABASE_URL_UNPOOLED` (direct) from the Neon `main` branch for *Production*. Alternatively, link the existing Neon project through **Storage → Neon** so Vercel sets them, and use preview branches.
 2. Recommended: enable Neon **preview branching** in the integration, so each preview deployment gets its own copy-on-write database branch.
 3. Deploy. The `vercel-build` script runs `scripts/migrate.ts` against the direct URL, then `next build`, so the schema always matches the deployed code.
 4. To load the demo district into a **development** branch:
