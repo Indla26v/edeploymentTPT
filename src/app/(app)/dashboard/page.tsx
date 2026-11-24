@@ -62,6 +62,8 @@ async function DashboardData() {
   if (attention.myProposals) actions.push({ label: `${plural(attention.myProposals, "proposal", "proposals")} to submit`, href: "/plans", tone: "warning" });
   if (attention.toConsolidate) actions.push({ label: `${plural(attention.toConsolidate, "plan", "plans")} ready to consolidate`, href: "/plans", tone: "warning" });
   if (attention.toSource) actions.push({ label: `${plural(attention.toSource, "plan needs", "plans need")} force sourcing`, href: "/plans", tone: "warning" });
+  if (attention.toAnswer) actions.push({ label: `${plural(attention.toAnswer, "force request", "force requests")} to answer`, href: "/station/requests", tone: "warning" });
+  if (attention.toName) actions.push({ label: `${plural(attention.toName, "nominal roll", "nominal rolls")} to send`, href: "/station/requests", tone: "warning" });
   if (attention.drafts) actions.push({ label: `${plural(attention.drafts, "draft plan", "draft plans")} not sent yet`, href: "/plans", tone: "info" });
   if (attention.pendingTransfers && can(user, "transfers.approve")) actions.push({ label: `${attention.pendingTransfers} transfer request${attention.pendingTransfers > 1 ? "s" : ""} to review`, href: "/masters/transfers", tone: "warning" });
   else if (attention.pendingTransfers && can(user, "transfers.request")) actions.push({ label: `${attention.pendingTransfers} transfer request${attention.pendingTransfers > 1 ? "s" : ""} awaiting approval`, href: "/masters/transfers", tone: "info" });

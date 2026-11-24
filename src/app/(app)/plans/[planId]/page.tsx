@@ -74,6 +74,13 @@ async function Plan({ params }: PageProps<"/plans/[planId]">) {
               </Link>
             </Button>
           )}
+          {["sourcing", "placement", "published", "live", "completed"].includes(status) && (
+            <Button size="sm" variant={status === "sourcing" && can(user, "force.distribute") && user.activeRole === "UNIT_OFFICER" ? "default" : "outline"} asChild>
+              <Link href={`/plans/${plan.id}/sourcing`}>
+                <Users /> {status === "sourcing" && can(user, "force.distribute") && user.activeRole === "UNIT_OFFICER" ? "Distribute force" : "Sourcing"}
+              </Link>
+            </Button>
+          )}
           {mine && (
             <Button size="sm" asChild>
               <Link href={`/plans/${plan.id}/components/${mine.id}`}>

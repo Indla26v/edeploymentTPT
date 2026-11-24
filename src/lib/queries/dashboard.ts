@@ -105,11 +105,25 @@ export async function getAttention(user: CurrentUser, unitId: string, stationIds
     user.activeRole === "UNIT_OFFICER" ? planCount("sourcing") : 0,
     user.activeRole === "INITIATING_OFFICER" ? planCount("draft") : 0,
   ]);
+  let toAnswer = 0;
+  let toName = 0;
+  if (user.activeRole === "OFFICE_INCHARGE" && stationIds?.length) {
+    const r = await db.execute<{ answer: number; name: number }>(sql`
+      select count(*) filter (where fr.status = 'sent' and fr.deadline_at > now())::int answer,
+             count(*) filter (where (fr.status in ('committed','partial','auto_accepted') or (fr.status = 'sent' and fr.deadline_at <= now()))
+               and (select coalesce(sum(coalesce(l.committed, l.requested)),0) from force_request_lines l where l.request_id = fr.id)
+                 > (select count(*) from plan_personnel pp where pp.request_id = fr.id)
+               and pl.status in ('sourcing','placement'))::int name
+      from force_requests fr join plans pl on pl.id = fr.plan_id
+      where fr.target_station_id in (${sql.join(stationIds.map((i) => sql`${i}::uuid`), sql`, `)})`);
+    toAnswer = r.rows[0]?.answer ?? 0;
+    toName = r.rows[0]?.name ?? 0;
+  }
   const st = stationIds ? inArray(transferRequests.fromStationId, stationIds.length ? stationIds : NONE) : undefined;
   const [[transfers], [noIncharge], [points]] = await Promise.all([
     db.select({ n: count() }).from(transferRequests).where(and(eq(transferRequests.unitId, unitId), eq(transferRequests.status, "pending"), st)),
     db.select({ n: count() }).from(stations).where(and(eq(stations.unitId, unitId), isNull(stations.inchargePersonId))),
     db.select({ n: count() }).from(deploymentPoints).where(and(eq(deploymentPoints.unitId, unitId), eq(deploymentPoints.isActive, true))),
   ]);
-  return { pendingTransfers: transfers!.n, stationsWithoutIncharge: noIncharge!.n, points: points!.n, myProposals, toConsolidate, toSource, drafts };
+  return { pendingTransfers: transfers!.n, stationsWithoutIncharge: noIncharge!.n, points: points!.n, myProposals, toConsolidate, toSource, drafts, toAnswer, toName };
 }

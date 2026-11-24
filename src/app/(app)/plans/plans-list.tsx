@@ -20,6 +20,7 @@ function nextStep(r: PlanListRow, role: Role): { label: string; href: string } {
   }
   if (r.status === "draft") return { label: "Continue setup", href: `/plans/${r.id}/setup` };
   if ((r.status === "proposing" || r.status === "consolidating") && role === "INITIATING_OFFICER") return { label: "Consolidate", href: `/plans/${r.id}/consolidate` };
+  if (r.status === "sourcing" && role === "UNIT_OFFICER") return { label: "Distribute force", href: `/plans/${r.id}/sourcing` };
   return { label: "Open", href: `/plans/${r.id}` };
 }
 
