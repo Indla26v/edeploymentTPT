@@ -40,3 +40,11 @@ export const assignmentSource = pgEnum("assignment_source", ["suggested", "manua
 
 export const attendanceEvent = pgEnum("attendance_event", ["check_in", "check_out"]);
 export const attendanceVia = pgEnum("attendance_via", ["qr", "manual"]);
+
+export const taskPriority = pgEnum("task_priority", ["low", "normal", "high", "urgent"]);
+/** open → action_taken (assignee reports) → closed (OM verifies) | reopened (OM sends back) */
+export const taskStatus = pgEnum("task_status", ["open", "action_taken", "closed", "reopened"]);
+export const taskUpdateKind = pgEnum("task_update_kind", ["comment", "action_taken", "closed", "reopened"]);
+export const meetingStatus = pgEnum("meeting_status", ["scheduled", "held", "cancelled"]);
+export const appointmentStatus = pgEnum("appointment_status", ["scheduled", "met", "no_show", "cancelled"]);
+export const noteColor = pgEnum("note_color", ["yellow", "blue", "green", "pink", "gray"]);

@@ -4,7 +4,7 @@ import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { getDb } from "@/lib/db";
-import { deploymentPoints, divisions, persons, planComponents, plans, ranks, stations, transferRequests, units } from "@/lib/db/schema";
+import { deploymentPoints, divisions, meetingParticipants, meetings, persons, planComponents, plans, ranks, stations, taskAssignees, tasks, transferRequests, units } from "@/lib/db/schema";
 import type { CurrentUser } from "@/lib/auth/session";
 
 const NONE = ["00000000-0000-0000-0000-000000000000"];
@@ -111,6 +111,18 @@ export async function getAttention(user: CurrentUser, unitId: string, stationIds
       : user.activeRole === "INITIATING_OFFICER"
         ? await planCount("placement")
         : 0;
+  let toVerify = 0;
+  let myTasks = 0;
+  let meetingsToday = 0;
+  if (user.activeRole === "OFFICE_MANAGER" || user.activeRole === "EMPLOYEE") {
+    const dayStart = new Date(new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }) + "T00:00:00+05:30");
+    const dayEnd = new Date(dayStart.getTime() + 86400e3);
+    [toVerify, myTasks, meetingsToday] = await Promise.all([
+      user.activeRole === "OFFICE_MANAGER" ? db.select({ n: count() }).from(tasks).where(and(eq(tasks.unitId, unitId), eq(tasks.status, "action_taken"))).then((r) => r[0]!.n) : 0,
+      db.select({ n: count() }).from(taskAssignees).innerJoin(tasks, eq(tasks.id, taskAssignees.taskId)).where(and(eq(taskAssignees.userId, user.id), inArray(tasks.status, ["open", "reopened"]))).then((r) => r[0]!.n),
+      db.select({ n: count() }).from(meetingParticipants).innerJoin(meetings, eq(meetings.id, meetingParticipants.meetingId)).where(and(eq(meetingParticipants.userId, user.id), eq(meetings.status, "scheduled"), sql`${meetings.startsAt} >= ${dayStart.toISOString()}::timestamptz and ${meetings.startsAt} < ${dayEnd.toISOString()}::timestamptz`)).then((r) => r[0]!.n),
+    ]);
+  }
   let toAnswer = 0;
   let toName = 0;
   if (user.activeRole === "OFFICE_INCHARGE" && stationIds?.length) {
@@ -131,5 +143,5 @@ export async function getAttention(user: CurrentUser, unitId: string, stationIds
     db.select({ n: count() }).from(stations).where(and(eq(stations.unitId, unitId), isNull(stations.inchargePersonId))),
     db.select({ n: count() }).from(deploymentPoints).where(and(eq(deploymentPoints.unitId, unitId), eq(deploymentPoints.isActive, true))),
   ]);
-  return { pendingTransfers: transfers!.n, stationsWithoutIncharge: noIncharge!.n, points: points!.n, myProposals, toConsolidate, toSource, drafts, toAnswer, toName, toPlace };
+  return { pendingTransfers: transfers!.n, stationsWithoutIncharge: noIncharge!.n, points: points!.n, myProposals, toConsolidate, toSource, drafts, toAnswer, toName, toPlace, toVerify, myTasks, meetingsToday };
 }

@@ -17,13 +17,14 @@ import { ROLE_LABEL } from "@/lib/authz/roles";
 import { getAttention, getStateOverview, getUnitDashboard } from "@/lib/queries/dashboard";
 import { can, scopeStationIds } from "@/lib/authz/authorize";
 import { formatNumber } from "@/lib/utils";
+import { OfficeDashboard } from "./office-dashboard";
 
 export const metadata: Metadata = { title: "Dashboard" };
 
 export default function DashboardPage() {
   return (
     <div className="space-y-4">
-      <PageHeader title="Dashboard" description="Force strength, availability and stations for your unit." />
+      <PageHeader title="Dashboard" description="What needs your attention, and how your unit stands." />
       <Suspense fallback={<DashboardSkeleton />}>
         <DashboardData />
       </Suspense>
@@ -35,6 +36,7 @@ async function DashboardData() {
   await connection();
   const user = await requireUser();
   if (!user.unitId) return <StateOverview />;
+  if (user.activeRole === "OFFICE_MANAGER" || user.activeRole === "EMPLOYEE") return <OfficeDashboard user={user} />;
   let data: Awaited<ReturnType<typeof getUnitDashboard>>;
   let attention: Awaited<ReturnType<typeof getAttention>>;
   const stationIds = scopeStationIds(user);
@@ -65,6 +67,9 @@ async function DashboardData() {
   if (attention.toAnswer) actions.push({ label: `${plural(attention.toAnswer, "force request", "force requests")} to answer`, href: "/station/requests", tone: "warning" });
   if (attention.toName) actions.push({ label: `${plural(attention.toName, "nominal roll", "nominal rolls")} to send`, href: "/station/requests", tone: "warning" });
   if (attention.toPlace) actions.push({ label: user.activeRole === "COMPONENT_OFFICER" ? `${plural(attention.toPlace, "component", "components")} to place` : `${plural(attention.toPlace, "plan", "plans")} in placement — publish when ready`, href: "/plans", tone: "warning" });
+  if (attention.toVerify) actions.push({ label: `${plural(attention.toVerify, "task", "tasks")} to verify`, href: "/office/tasks", tone: "warning" });
+  if (attention.myTasks) actions.push({ label: `${plural(attention.myTasks, "task", "tasks")} assigned to you`, href: "/office/tasks", tone: "warning" });
+  if (attention.meetingsToday) actions.push({ label: `${plural(attention.meetingsToday, "meeting", "meetings")} today`, href: "/office/meetings", tone: "info" });
   if (attention.drafts) actions.push({ label: `${plural(attention.drafts, "draft plan", "draft plans")} not sent yet`, href: "/plans", tone: "info" });
   if (attention.pendingTransfers && can(user, "transfers.approve")) actions.push({ label: `${attention.pendingTransfers} transfer request${attention.pendingTransfers > 1 ? "s" : ""} to review`, href: "/masters/transfers", tone: "warning" });
   else if (attention.pendingTransfers && can(user, "transfers.request")) actions.push({ label: `${attention.pendingTransfers} transfer request${attention.pendingTransfers > 1 ? "s" : ""} awaiting approval`, href: "/masters/transfers", tone: "info" });

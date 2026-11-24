@@ -2,6 +2,7 @@ import { timingSafeEqual } from "node:crypto";
 
 import { getDb } from "@/lib/db";
 import { absentAlerts } from "@/lib/execution/alerts";
+import { remindMeetings } from "@/lib/office/server";
 import { drainOutbox } from "@/lib/server/outbox";
 import { autoAcceptDue, remindDue } from "@/lib/sourcing/server";
 
@@ -21,6 +22,7 @@ export async function GET(request: Request) {
   const autoAccepted = await db.transaction((tx) => autoAcceptDue(tx, now));
   const reminded = await db.transaction((tx) => remindDue(tx, now));
   const absent = await db.transaction((tx) => absentAlerts(tx, now));
+  const meetingReminders = await db.transaction((tx) => remindMeetings(tx, now));
   const outbox = await drainOutbox(db, 200, now);
-  return Response.json({ ok: true, at: now.toISOString(), autoAccepted, reminded, absent, outbox });
+  return Response.json({ ok: true, at: now.toISOString(), autoAccepted, reminded, absent, meetingReminders, outbox });
 }

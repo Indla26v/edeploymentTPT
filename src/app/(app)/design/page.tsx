@@ -1,6 +1,11 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import Link from "next/link";
+import { connection } from "next/server";
+
+import { AccessDenied } from "@/components/access-denied";
+import { requireUser } from "@/lib/auth/session";
+import { can } from "@/lib/authz/authorize";
 
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -30,14 +35,31 @@ const SECTIONS = [
   { id: "feedback", label: "Loading & empty" },
 ];
 
+/** The design showcase is for administrators (it demonstrates components with sample data). */
+async function AdminOnly({ children }: { children: React.ReactNode }) {
+  await connection();
+  const user = await requireUser();
+  return can(user, "admin.roles.manage") ? children : <AccessDenied />;
+}
+
 export default function DesignPage() {
+  return (
+    <Suspense fallback={<Skeleton className="h-[480px] rounded-2xl" />}>
+      <AdminOnly>
+        <DesignShowcase />
+      </AdminOnly>
+    </Suspense>
+  );
+}
+
+function DesignShowcase() {
   return (
     <div className="space-y-8">
       <PageHeader
         title="Design system"
         description="Clean, light and compact: rounded surfaces, pill-shaped buttons, status that never relies on colour alone. Everything below is live — try the ledger and drag officers on the placement board."
         breadcrumb={[{ label: "Home", href: "/dashboard" }, { label: "Design system" }]}
-        actions={<Badge tone="info" className="py-1">Phase 1 · for sign-off</Badge>}
+        actions={<Badge tone="info" className="py-1">Administrators only</Badge>}
       />
 
       <nav aria-label="Sections" className="sticky top-14 z-20 -mx-4 overflow-x-auto bg-background/85 px-4 py-2 backdrop-blur-md sm:-mx-5 sm:px-5 lg:-mx-6 lg:px-6">
