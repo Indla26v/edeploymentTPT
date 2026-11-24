@@ -28,14 +28,14 @@ Sidebar entries for later phases open a "coming in phase N" card, so you can nav
 ## Stack
 
 - Next.js 16 (App Router; Cache Components and Partial Prefetching enabled), TypeScript (strict)
-- PostgreSQL with Drizzle ORM (`pg` driver); Neon in the cloud
+- PostgreSQL with Drizzle ORM (`pg` driver): Neon (Mumbai) in the cloud, Postgres 16 locally and in CI
 - Tailwind CSS v4, Radix primitives, and shadcn-style components written for this design (pill buttons, rounded surfaces, light/dark)
 - TanStack Table, dnd-kit, react-hook-form + zod, sonner
 - Vitest (unit tests plus a real-Postgres suite), Playwright (desktop and phone smoke tests)
 
 ## Getting started
 
-Requires Node 22, pnpm 10 and PostgreSQL 16 (or a Neon database).
+Requires Node 22, pnpm 10 and PostgreSQL 16 locally. To develop against a Neon branch instead, see [Database: Neon Postgres](#database-neon-postgres).
 
 ```bash
 pnpm install
@@ -51,6 +51,35 @@ Useful pages:
 - `/design`: the design system, including live demos of the reconciliation ledger and the placement board
 - `/login`: the sign-in screens (OTP is wired up in phase 2)
 
+## Database: Neon Postgres
+
+Production and preview deployments use **Neon** (serverless Postgres). Local development and CI use plain Postgres 16. The code is the same for both; only the connection URLs differ.
+
+| Variable | Neon value | Used by |
+|---|---|---|
+| `DATABASE_URL` | pooled connection (`-pooler` host) | the running app |
+| `DATABASE_URL_UNPOOLED` | direct connection | migrations, seed, drizzle-kit |
+| `TEST_DATABASE_URL` | local DB or a throwaway branch | `pnpm test` |
+
+How the app handles Neon (`src/lib/db/`):
+
+- `sslmode=require` is upgraded to `verify-full`. Neon's certificates are publicly trusted, so this is full TLS verification without node-postgres's start-up warning.
+- On Vercel Fluid compute, `attachDatabasePool` closes idle connections before an instance is suspended. Pool idle timeout is 5 s, so Neon can scale to zero.
+- Migrations always use the direct URL, never the pooler.
+- `pnpm db:seed` wipes data, so it refuses production and needs `--allow-remote` for any non-local database.
+
+### Set it up on Vercel
+
+1. In the Vercel project, go to **Storage → Create → Neon**. Pick region **AWS Asia Pacific (Mumbai) – ap-south-1** and connect it to *Production*, *Preview* and *Development*. This sets `DATABASE_URL` and `DATABASE_URL_UNPOOLED`.
+2. Recommended: enable Neon **preview branching** in the integration, so each preview deployment gets its own copy-on-write database branch.
+3. Deploy. The `vercel-build` script runs `scripts/migrate.ts` against the direct URL, then `next build`, so the schema always matches the deployed code.
+4. To load the demo district into a **development** branch:
+   ```bash
+   vercel env pull .env.local
+   pnpm db:seed --allow-remote
+   ```
+5. A Vercel **Pro** plan is needed for the per-minute cron used by deadlines and notifications, which start in phase 5.
+
 ## Scripts
 
 | Command | What it does |
@@ -60,8 +89,9 @@ Useful pages:
 | `pnpm test` | Vitest: rules engine, utils, and DB tests (DB tests skip when `TEST_DATABASE_URL` is unset) |
 | `pnpm test:e2e` | Playwright smoke tests (needs `pnpm build` first) |
 | `pnpm db:generate` | Create a migration after a schema change |
-| `pnpm db:migrate [--test]` | Apply migrations to `DATABASE_URL` (or `TEST_DATABASE_URL`) |
-| `pnpm db:seed [--test]` | Reset and seed the demo district (refuses when `NODE_ENV=production`) |
+| `pnpm db:migrate [--test]` | Apply migrations over the direct connection (`DATABASE_URL_UNPOOLED`, else `DATABASE_URL`; `--test` uses `TEST_DATABASE_URL`) |
+| `pnpm db:seed [--test] [--allow-remote]` | Reset and seed the demo district. Refuses production; needs `--allow-remote` for Neon or any non-local DB |
+| `pnpm vercel-build` | What Vercel runs: migrate, then build |
 
 ## Project layout
 

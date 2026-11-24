@@ -5,18 +5,20 @@
  *   pnpm db:seed           -> DATABASE_URL (dev)
  *   pnpm db:seed --test    -> TEST_DATABASE_URL
  *
- * Destructive: truncates the org tables first. Refuses to run when NODE_ENV=production.
+ * Destructive: truncates the org tables first. Refuses to run when NODE_ENV=production or on a
+ * Vercel production deployment, and needs --allow-remote for any non-local database (e.g. a Neon
+ * development branch), so a cloud database is never wiped by accident.
  */
 import { fakerEN_IN as faker } from "@faker-js/faker";
 import { eq, sql } from "drizzle-orm";
 
 import { createDb } from "../src/lib/db/client";
 import { divisions, persons, ranks, stations, units } from "../src/lib/db/schema";
-import { requireEnv } from "./env";
+import { scriptDatabaseUrl } from "./env";
 import { AGE_BAND, DEMO_UNIT, DIVISIONS, OTHER_UNITS, RANKS, SEED_REFERENCE_DATE } from "./seed-data";
 
-if (process.env.NODE_ENV === "production") {
-  console.error("Refusing to seed with NODE_ENV=production.");
+if (process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production") {
+  console.error("Refusing to seed a production environment.");
   process.exit(1);
 }
 
@@ -117,7 +119,12 @@ export async function seed(url: string) {
 
 const isMain = process.argv[1]?.endsWith("seed.ts");
 if (isMain) {
-  const url = process.argv.includes("--test") ? requireEnv("TEST_DATABASE_URL") : requireEnv("DATABASE_URL");
+  const { url, label, local } = scriptDatabaseUrl();
+  if (!local && !process.argv.includes("--allow-remote")) {
+    console.error(`Refusing to wipe and seed remote database ${label}. Re-run with --allow-remote if this is a disposable dev branch.`);
+    process.exit(1);
+  }
+  console.log(`Seeding ${label} …`);
   seed(url).catch((err) => {
     console.error(err);
     process.exit(1);
