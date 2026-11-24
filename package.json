@@ -15,6 +15,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
     "db:seed": "tsx scripts/seed.ts",
+    "db:seed:demo": "vitest run --config vitest.demo.config.mts",
     "db:studio": "drizzle-kit studio",
     "db:reset": "tsx scripts/migrate.ts && tsx scripts/seed.ts",
     "cron:tick": "tsx scripts/cron-tick.ts"

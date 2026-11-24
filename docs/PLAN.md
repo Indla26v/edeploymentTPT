@@ -17,6 +17,24 @@ Decisions confirmed: accept + optional top-up · CO places, IO overrides · v1 =
 
 ---
 
+## As built (supersedes the plan below where they differ)
+
+All ten phases are built. Decisions taken during the build that change what this plan says:
+
+| Plan said | As built | Why |
+|---|---|---|
+| Mobile + OTP login | **Username + password** (Better Auth `username` plugin), lockout after 5 failures, forced password change, optional **TOTP two-step sign-in** (required for State Admins when `REQUIRE_ADMIN_2FA=true`) | Your decision; OTP can be added later as another Better Auth plugin |
+| DGP flow deferred | **Built as Phase 10**: UO sends the gap to the Chief Office → DGP distributes across units → receiving UO commits and asks its own stations → names flow into the requesting plan | Your decision |
+| Light and dark mode | **Light theme only**, compact density, collapsible sidebar, page templates (list / detail / wizard / board) | Your decision |
+| Hosted on Vercel | **No deployment**: GitHub + local only. `vercel.json` (cron) and the `vercel-build` script stay so a later deploy needs no code change | Your decision |
+| Neon in Mumbai | Neon **Singapore** (`aws-ap-southeast-1`); Mumbai isn't offered on this account | Availability |
+| Vercel Blob for files | Local disk under `.data/uploads` (served through an access-checked route); Vercel Blob is used automatically when `BLOB_READ_WRITE_TOKEN` is set | No deployment |
+| SMS / WhatsApp | Messages are queued in `notifications_outbox` and delivered by a console adapter; a real provider is one adapter (see `docs/RUNBOOK.md` §6) | No provider keys yet |
+
+How to run it, the demo accounts and the database set-up are in the README; operations (backups, secrets, cron, SMS provider) are in `docs/RUNBOOK.md`.
+
+---
+
 ## Tech stack
 
 | Concern | Choice | Why |
@@ -277,6 +295,19 @@ All of these reuse `force_requests` with `to_unit_id`, the same ledger and the s
 - **Manual:** `pnpm dev` on a Neon branch; walk each role through the role switcher.
 
 ---
+
+### Where the 12-step scenario is tested (as built)
+
+| Step | Covered by |
+|---|---|
+| 1–5 IO initiates → CO proposes → IO inline edit → UO distributes → OI commits less and names officers → UO accepts the shortfall (no return to IO/CO) | `tests/e2e/plans.spec.ts` (browser), `tests/db/plans.test.ts`, `tests/db/sourcing.test.ts` |
+| 6 Suggest respects age / fitness / gender | `tests/unit/placement*.test.ts`, `tests/db/placement.test.ts` |
+| 7 CO drags an officer (and undo, "Place in…"); IO moves across components | `tests/e2e/plans.spec.ts`, `tests/db/placement.test.ts` |
+| 8 Nothing queued before Publish; re-publish notifies only changed officers | `tests/e2e/plans.spec.ts`, `tests/db/placement.test.ts` |
+| 9 ID-card QR → check-in → live count | `tests/e2e/plans.spec.ts`, `tests/db/execution.test.ts` |
+| 10 Accommodation auto-allocation | `tests/e2e/plans.spec.ts`, `tests/db/execution.test.ts` |
+| 11 Office task → action → verify → reports | `tests/e2e/office.spec.ts`, `tests/db/office.test.ts` |
+| 12 DGP escalation fills a gap from another district | `tests/e2e/dgp.spec.ts`, `tests/db/dgp.test.ts` |
 
 ## Execution order after approval
 

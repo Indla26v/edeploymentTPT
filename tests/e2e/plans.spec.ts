@@ -169,7 +169,17 @@ test.describe("plan → propose → consolidate (UI)", () => {
     await phone.close();
     await io2.goto(`${planUrl}/live`);
     await expect(io2.getByRole("button", { name: /^Present 1/ })).toBeVisible();
+
     await io2Ctx.close();
+
+    // 10. Unit Officer: accommodation auto-allotted by gender and capacity
+    const lodgeCtx = await browser.newContext({ storageState: authFile("sp") });
+    const lodge = await lodgeCtx.newPage();
+    await lodge.goto(`${planUrl}/accommodation`);
+    await lodge.waitForLoadState("networkidle");
+    await lodge.getByRole("button", { name: /^Auto-allot/ }).click();
+    await expect(lodge.getByText(/Allotted \d+ officers/)).toBeVisible();
+    await lodgeCtx.close();
   });
 });
 

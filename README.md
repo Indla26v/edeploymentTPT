@@ -1,97 +1,130 @@
 # eDeployment (simplified)
 
-Bandobast (security plan) planning for police units: initiate a plan, let Component Officers design sectors and points, source force from stations, place officers at points, publish duties, and monitor the bandobast live.
+Bandobast (security plan) planning for police units. The Initiating Officer creates a plan. Component Officers design sectors and points. The Unit Officer sources men from stations, and officers are placed at points. Duties are published, and the bandobast is monitored live with QR check-in. Alongside it sit an Office Manager module (tasks, meetings, appointments, reports, notes) and an inter-district flow through the Chief Office (DGP).
 
 It rebuilds the workflow in the two eDeployment user manuals, with two deliberate changes:
 
-1. **No re-application when stations give fewer men.** The Unit Officer accepts the shortfall in one click, or tops up from other stations in parallel. The plan never goes back to the Initiating Officer or Component Officers (`src/lib/sourcing/ledger.ts`).
-2. **Officers decide placement; the system only suggests.** Suggestions take age, fitness and point intensity into account and give a reason for every pick. Component Officers place officers in their own component, and the Initiating Officer can override across components. Nothing is sent to officers until someone clicks **Publish** (`src/lib/placement/rules.ts`).
+1. **No re-application when stations give fewer men.** The Unit Officer accepts the shortfall in one click, or tops up from other stations in parallel. The plan never goes back to the Initiating Officer or Component Officers. If a gap remains, it can be sent to the Chief Office, which asks other districts.
+2. **Officers decide placement; the system only suggests.** Suggestions take age, fitness, gender and point intensity into account, and give a reason for every pick. Component Officers place officers in their own component, and the Initiating Officer can override across components. Nothing is sent to officers until someone clicks **Publish**. A re-publish only notifies officers whose posting changed.
 
-The full delivery plan, including a feature checklist covering both manuals, is in [`docs/PLAN.md`](docs/PLAN.md).
+Further documentation:
+
+- [`docs/PLAN.md`](docs/PLAN.md) has the design and the feature checklist covering both manuals. Its "As built" section lists where the build differs from the original plan.
+- [`docs/RUNBOOK.md`](docs/RUNBOOK.md) covers configuration, backups, secrets, cron and adding an SMS provider.
 
 ## Status
 
-| Phase | Scope | State |
-|---|---|---|
-| 1 | Foundation, design system, app shell, core schema, seed, CI | **Done** |
-| 2 | Phone OTP login (Better Auth), roles & scopes, admin screens, audit log | Next |
-| 3 | Masters | Planned |
-| 4 | Plan → propose → consolidate | Planned |
-| 5 | Force sourcing & reconciliation ledger | Planned (rules engine already built and tested) |
-| 6 | Placement board & publish | Planned (suggestion engine already built and tested) |
-| 7 | ID cards, QR check-in, live map, duty pass, accommodation, equipment | Planned |
-| 8 | Office Manager module | Planned |
-| 9 | Hardening | Planned |
+All ten phases are built. Each one was pushed with lint, typecheck, unit/DB tests, build, Playwright (desktop and phone) and CI green.
 
-Sidebar entries for later phases open a "coming in phase N" card, so you can navigate the whole app as it grows.
+| Phase | Scope |
+|---|---|
+| 1 | Foundation, design system, app shell, schema, seed, CI |
+| 2 | Username + password sign-in, roles and scopes, admin screens, audit log, notifications |
+| 3 | Masters: persons, stations, ranks, units, components, points library (map), equipment, accommodation, vehicles, teams, shifts, instructions, ID-card headers, transfers, unit profile |
+| 4 | Initiate plan, Component Officer proposal wizard, IO consolidation with inline edits |
+| 5 | Force sourcing: distribution grid, station replies with names, reconciliation ledger (accept shortfall / top-up), deadlines |
+| 6 | Placement board (suggest, drag, "Place in…", lock, drop slot), publish with snapshot and diff |
+| 7 | ID cards and duty passes (PDF, signed QR), QR check-in, live monitoring map, scheme book, accommodation, equipment |
+| 8 | Office Manager: tasks, meetings calendar and minutes, appointments, MIS reports, notes |
+| 9 | Hardening: CSP, two-step sign-in (TOTP), audited exports, isolation, load and accessibility tests |
+| 10 | DGP / inter-district: send a gap to the Chief Office, unit-wise distribution, other-unit requirements |
 
-## Stack
+## Run it locally
 
-- Next.js 16 (App Router; Cache Components and Partial Prefetching enabled), TypeScript (strict)
-- PostgreSQL with Drizzle ORM (`pg` driver): Neon (Singapore) in the cloud, Postgres 16 locally and in CI
-- Tailwind CSS v4, Radix primitives, and shadcn-style components written for this design (pill buttons, rounded surfaces, light/dark)
-- TanStack Table, dnd-kit, react-hook-form + zod, sonner
-- Vitest (unit tests plus a real-Postgres suite), Playwright (desktop and phone smoke tests)
-
-## Getting started
-
-Requires Node 22 and pnpm 10, plus either a Neon `dev` branch connection string (easiest) or a local PostgreSQL 16.
-
-**With Neon (recommended):** put the `dev` branch URLs in `.env.local` as `DATABASE_URL` / `DATABASE_URL_UNPOOLED`. The branch is already migrated and seeded, so you can run `pnpm install && pnpm dev` straight away.
-
-**With local Postgres:**
+Requires Node 22 and pnpm 10, plus PostgreSQL 16 (local) or a Neon branch.
 
 ```bash
 pnpm install
-cp .env.example .env.local      # then edit DATABASE_URL / TEST_DATABASE_URL if needed
-pnpm db:migrate                 # apply migrations
-pnpm db:seed                    # fictional demo district: 12 stations, 400 officers
-pnpm dev                        # http://localhost:3000
 ```
 
-Useful pages:
+```bash
+cp .env.example .env.local
+```
 
-- `/dashboard`: unit strength and availability from the database
-- `/design`: the design system, including live demos of the reconciliation ledger and the placement board
-- `/login`: the sign-in screens (OTP is wired up in phase 2)
+Edit `.env.local`, then:
 
-## Database: Neon Postgres
+```bash
+pnpm db:migrate
+```
 
-Production and preview deployments use **Neon** (serverless Postgres). CI uses plain Postgres 16. Local development can use either one. The code is the same for both; only the connection URLs differ.
+```bash
+pnpm db:seed:demo
+```
 
-**Current Neon project:** `edeployment` (id `bold-glitter-41655874`), Postgres 16, region **AWS Singapore (`aws-ap-southeast-1`)**. Mumbai isn't offered on this Neon account.
+```bash
+pnpm dev
+```
 
-| Branch | Contents | Use |
+Open http://localhost:3000 and sign in with a demo account (below).
+
+- `pnpm db:seed:demo` wipes the database. It loads the demo district, and then two bandobasts built through the real workflow:
+  - **Nagula Chavithi Utsav 2026**: completed ten days ago; published, attended, lodged.
+  - **Karthika Deepotsavam 2026**: a week out and mid-way through force sourcing. Town I PS gave 4 of 6 PC; Town II PS hasn't replied; 2 PC were sent to the Chief Office.
+  - Office tasks, meetings, an appointment and notes.
+- `pnpm db:seed` loads the same masters and accounts **without** the demo plans. The automated tests use this.
+
+### Using Neon instead of local Postgres
+
+Neon project `edeployment` (id `bold-glitter-41655874`, AWS Singapore):
+
+| Branch | State |
+|---|---|
+| `main` | Migrated to the latest schema (all 11 migrations), no data |
+| `dev` | Still holds the phase 1 schema and data. Bring it up to date from your machine |
+
+To bring `dev` up to date:
+
+1. Put the `dev` branch's pooled URL in `DATABASE_URL` and its direct URL in `DATABASE_URL_UNPOOLED` (Neon console → Branch → Connect).
+2. Run the following. The second command wipes `dev` and loads the demo data; it refuses any non-local database unless `ALLOW_REMOTE=1` is set.
+
+```bash
+pnpm db:migrate
+```
+
+```bash
+ALLOW_REMOTE=1 DATABASE_URL="$DATABASE_URL_UNPOOLED" pnpm db:seed:demo
+```
+
+Connection strings are never committed.
+
+## Demo accounts
+
+Every demo account uses the password **`Demo@12345`**. They exist only in seeded development databases; the seed refuses to run in production. Set `SHOW_DEMO_ACCOUNTS=true` to list them on the sign-in page. With `REQUIRE_ADMIN_2FA=true` (the default), `admin` is asked to set up two-step sign-in with an authenticator app at first sign-in. Set it to `false` for a quick local demo.
+
+| Username | Role | Who |
 |---|---|---|
-| `main` | schema only | production (via Vercel env vars) |
-| `dev` | schema plus the fictional Demo District (12 stations, 400 officers) | local development |
+| `admin` | State Admin | State administrator: users, roles and permissions |
+| `sp` | Unit Officer + Initiating Officer | SP, Demo District. Switch role from the header |
+| `addlsp` | Initiating Officer | Addl. SP, Demo District |
+| `dsp1`, `dsp2` | Component Officer | DSPs, Demo District |
+| `sho.town1`, `sho.town2`, `sho.rural` | Office Incharge | SHOs of Town I, Town II and Rural PS |
+| `om` | Office Manager | SI, District Police Office |
+| `staff1` | Employee | HC, District Police Office |
+| `pc1015` | Personnel | PC, Town I PS (duty passes) |
+| `dgp` | DGP / Chief Office | Distributes inter-district requests |
+| `sp.north` | Unit Officer | SP, North Demo District |
+| `sho.north1` | Office Incharge | SHO, North Town PS |
+| `comdt.apsp` | Unit Officer | Commandant, APSP 1st Battalion |
 
-Connection strings are never committed. Copy them from the Neon console (**Project → Branch → Connect**) into `.env.local`.
+All names, numbers and places in the demo data are fictional.
 
-| Variable | Neon value | Used by |
-|---|---|---|
-| `DATABASE_URL` | pooled connection (`-pooler` host) | the running app |
-| `DATABASE_URL_UNPOOLED` | direct connection | migrations, seed, drizzle-kit |
-| `TEST_DATABASE_URL` | local DB or a throwaway branch | `pnpm test` |
+**A quick tour:**
 
-How the app handles Neon (`src/lib/db/`):
+1. Sign in as `sp`. The dashboard lists what needs attention.
+2. Open **Karthika Deepotsavam 2026** → *Force sourcing* to see the ledger: accept the shortfall, top up, or send the gap to the Chief Office.
+3. Sign in as `dgp` to distribute that gap to North district.
+4. Then sign in as `sp.north` and `sho.north1` to answer it.
+5. The completed plan has ID cards, duty passes, the scheme book and the live attendance view.
 
-- `sslmode=require` is upgraded to `verify-full`. Neon's certificates are publicly trusted, so this is full TLS verification without node-postgres's start-up warning.
-- On Vercel Fluid compute, `attachDatabasePool` closes idle connections before an instance is suspended. Pool idle timeout is 5 s, so Neon can scale to zero.
-- Migrations always use the direct URL, never the pooler.
-- `pnpm db:seed` wipes data, so it refuses production and needs `--allow-remote` for any non-local database.
+## Stack
 
-### Set it up on Vercel
-
-1. In the Vercel project, add `DATABASE_URL` (pooled) and `DATABASE_URL_UNPOOLED` (direct) from the Neon `main` branch for *Production*. Alternatively, link the existing Neon project through **Storage → Neon** so Vercel sets them, and use preview branches.
-2. Recommended: enable Neon **preview branching** in the integration, so each preview deployment gets its own copy-on-write database branch.
-3. Deploy. The `vercel-build` script runs `scripts/migrate.ts` against the direct URL, then `next build`, so the schema always matches the deployed code.
-4. To load the demo district into a **development** branch:
-   ```bash
-   vercel env pull .env.local
-   pnpm db:seed --allow-remote
-   ```
-5. A Vercel **Pro** plan is needed for the per-minute cron used by deadlines and notifications, which start in phase 5.
+- Next.js 16 (App Router; Cache Components and Partial Prefetching), React 19, TypeScript (strict).
+- PostgreSQL with Drizzle ORM (`pg` driver): Neon or Postgres 16.
+- Better Auth: username + password, database sessions, rate limiting, TOTP two-step.
+- Tailwind CSS v4 with shadcn-style components (light theme, pill buttons, rounded surfaces).
+- TanStack Table, dnd-kit, zod and sonner.
+- Leaflet maps, React-PDF and ExcelJS.
+- Vitest (unit tests plus a real-Postgres suite that calls the Server Actions), Playwright (desktop and phone, axe accessibility checks).
 
 ## Scripts
 
@@ -99,31 +132,36 @@ How the app handles Neon (`src/lib/db/`):
 |---|---|
 | `pnpm dev` / `pnpm build` / `pnpm start` | Next.js |
 | `pnpm lint` / `pnpm typecheck` | ESLint / route typegen + `tsc` |
-| `pnpm test` | Vitest: rules engine, utils, and DB tests (DB tests skip when `TEST_DATABASE_URL` is unset) |
-| `pnpm test:e2e` | Playwright smoke tests (needs `pnpm build` first) |
-| `pnpm db:generate` | Create a migration after a schema change |
-| `pnpm db:migrate [--test]` | Apply migrations over the direct connection (`DATABASE_URL_UNPOOLED`, else `DATABASE_URL`; `--test` uses `TEST_DATABASE_URL`) |
-| `pnpm db:seed [--test] [--allow-remote]` | Reset and seed the demo district. Refuses production; needs `--allow-remote` for Neon or any non-local DB |
-| `pnpm vercel-build` | What Vercel runs: migrate, then build |
+| `pnpm test` | Vitest: unit tests, and DB tests against `TEST_DATABASE_URL` (skipped when unset) |
+| `pnpm test:e2e` | Playwright on port 3100. Run `pnpm build` and `pnpm db:seed` first |
+| `pnpm db:generate --name <change>` | Create a migration after a schema change |
+| `pnpm db:migrate [--test]` | Apply migrations over the direct connection |
+| `pnpm db:seed [--test] [--allow-remote]` | Reset and load masters and demo accounts |
+| `pnpm db:seed:demo` | `db:seed`, plus two demo bandobasts and office samples (`ALLOW_REMOTE=1` for a non-local DB) |
+| `pnpm cron:tick` | Run the scheduled work once: deadlines, reminders, absentee alerts, outbox. Needs the app running |
 
 ## Project layout
 
 ```
-src/app/(app)/          signed-in area: dashboard, design showcase, placeholders for later phases
-src/app/(auth)/login    sign-in screens
-src/components/ui/      design-system primitives (button, card, sheet, table, …)
-src/components/         app components (status pill, KPI card, stage tracker, stepper, shell)
-src/lib/db/             Drizzle schema, client
-src/lib/sourcing/       reconciliation ledger (fix #1)
-src/lib/placement/      placement rules + suggestion engine (fix #2)
-src/lib/authz/          roles (phase 2 adds permissions and scopes)
-scripts/                migrate, seed
+src/app/(app)/plans/      plan list, initiate, proposal wizard, consolidate, sourcing, placement, live, documents
+src/app/(app)/station/    Office Incharge: force requests, distributed equipment, duty passes
+src/app/(app)/dgp/        Chief Office: unit-wise distribution
+src/app/(app)/requirements/  receiving Unit Officer: other unit requirements
+src/app/(app)/office/     Office Manager module
+src/app/(app)/masters/    masters
+src/app/c/[token]         public QR check-in
+src/lib/sourcing/         ledger, distribution engine, escalation
+src/lib/placement/        suggestion engine, publish diff
+src/lib/execution/        QR tokens, PDFs, attendance, allocation
+src/lib/server/mutate.ts  every write: permission → validation → transaction → audit
+scripts/                  migrate, seed, demo data, cron tick
 tests/unit, tests/db, tests/e2e
-drizzle/                SQL migrations
+drizzle/                  SQL migrations
 ```
 
 ## Notes for contributors
 
-- **Cache Components.** Anything that reads the session, cookies or the database must sit inside a `<Suspense>` boundary (see `src/app/(app)/dashboard/page.tsx`). The bundled docs in `node_modules/next/dist/docs/` describe this Next.js version.
-- **Age is derived, not stored.** Persons carry `dob`; use `ageFromDob`.
-- **All demo data is fictional.**
+- **Cache Components.** Anything that reads the session, cookies or the database must sit inside a `<Suspense>` boundary and call `connection()`. The bundled docs in `node_modules/next/dist/docs/` describe this Next.js version.
+- **Every write goes through `mutate()`.** It checks the permission, validates with zod, runs in a transaction, and writes an audit row.
+- **Reads go through the scoped helpers** in `src/lib/authz/`. `tests/db/isolation.test.ts` proves that one district can't see another's data.
+- **Age is derived, not stored.** Persons carry `dob`.
