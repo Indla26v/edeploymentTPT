@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "claude/**"]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: edeploy
+          POSTGRES_PASSWORD: edeploy
+          POSTGRES_DB: edeployment
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U edeploy"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://edeploy:edeploy@localhost:5432/edeployment
+      TEST_DATABASE_URL: postgresql://edeploy:edeploy@localhost:5432/edeployment_test
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Create test database
+        run: PGPASSWORD=edeploy psql -h localhost -U edeploy -d edeployment -c "CREATE DATABASE edeployment_test;"
+      - name: Migration drift check
+        run: |
+          pnpm db:generate --name ci_drift_check
+          if [ -n "$(git status --porcelain drizzle)" ]; then
+            echo "::error::Schema changed without a committed migration. Run pnpm db:generate."
+            git status --porcelain drizzle
+            exit 1
+          fi
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm db:migrate
+      - run: pnpm db:seed
+      - run: pnpm test
+      - run: pnpm build
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+      - name: E2E smoke
+        run: pnpm test:e2e --trace off
