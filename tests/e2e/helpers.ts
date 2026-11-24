@@ -10,3 +10,22 @@ export async function signIn(page: Page, username: string, password = DEMO_PASSW
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL((u) => !u.pathname.startsWith("/login"));
 }
+
+/** Read-only DB lookups for e2e set-up (loads .env.local locally; CI provides DATABASE_URL). */
+export async function dbQuery<T = Record<string, unknown>>(text: string, params: unknown[] = []): Promise<T[]> {
+  if (!process.env.DATABASE_URL) {
+    try {
+      process.loadEnvFile(".env.local");
+    } catch {
+      /* CI sets env directly */
+    }
+  }
+  const { Client } = await import("pg");
+  const c = new Client({ connectionString: process.env.DATABASE_URL });
+  await c.connect();
+  try {
+    return (await c.query(text, params)).rows as T[];
+  } finally {
+    await c.end();
+  }
+}

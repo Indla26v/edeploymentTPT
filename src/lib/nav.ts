@@ -60,7 +60,7 @@ export const NAV: NavGroup[] = [
     items: [
       { label: "Ongoing plans", href: "/plans", icon: ShieldCheck, permission: "plans.view", phase: 4, description: "Bandobasts in progress, with their stage tracker." },
       { label: "Initiate plan", href: "/plans/new", icon: FilePlus2, permission: "plans.initiate", phase: 4, description: "Create a bandobast or reuse a completed one." },
-      { label: "Completed plans", href: "/plans/completed", icon: History, permission: "plans.view", phase: 7, description: "Final duty allocation, proposed plan and scheme book of finished bandobasts." },
+      { label: "Completed plans", href: "/plans/completed", icon: History, permission: "plans.view", phase: 4, description: "Final duty allocation, proposed plan and scheme book of finished bandobasts." },
     ],
   },
   {
@@ -116,7 +116,7 @@ export const NAV: NavGroup[] = [
 export const ALL_NAV_ITEMS: NavItem[] = NAV.flatMap((g) => g.items);
 
 /** Highest delivery phase whose screens exist; later nav items render the "coming in phase N" card. */
-export const BUILT_PHASE = 3;
+export const BUILT_PHASE = 4;
 
 export function navFor(role: Role, permissions: ReadonlySet<string>): NavGroup[] {
   return NAV.map((g) => ({

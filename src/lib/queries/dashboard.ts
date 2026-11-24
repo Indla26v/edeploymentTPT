@@ -4,7 +4,8 @@ import { and, asc, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { getDb } from "@/lib/db";
-import { deploymentPoints, divisions, persons, ranks, stations, transferRequests, units } from "@/lib/db/schema";
+import { deploymentPoints, divisions, persons, planComponents, plans, ranks, stations, transferRequests, units } from "@/lib/db/schema";
+import type { CurrentUser } from "@/lib/auth/session";
 
 const NONE = ["00000000-0000-0000-0000-000000000000"];
 
@@ -78,22 +79,37 @@ export async function getStateOverview() {
       id: units.id,
       name: units.name,
       type: units.type,
-      persons: sql<number>`(select count(*) from ${persons} p where p.unit_id = ${units.id})`.mapWith(Number),
-      available: sql<number>`(select count(*) from ${persons} p where p.unit_id = ${units.id} and p.availability = 'available')`.mapWith(Number),
-      stations: sql<number>`(select count(*) from ${stations} s where s.unit_id = ${units.id})`.mapWith(Number),
+      persons: sql<number>`(select count(*) from ${persons} p where p.unit_id = "units"."id")`.mapWith(Number),
+      available: sql<number>`(select count(*) from ${persons} p where p.unit_id = "units"."id" and p.availability = 'available')`.mapWith(Number),
+      stations: sql<number>`(select count(*) from ${stations} s where s.unit_id = "units"."id")`.mapWith(Number),
     })
     .from(units)
     .orderBy(asc(units.displayOrder));
 }
 
 /** Counts behind the dashboard's "Needs attention" strip. */
-export async function getAttention(unitId: string, stationIds: string[] | null) {
+export async function getAttention(user: CurrentUser, unitId: string, stationIds: string[] | null) {
   const db = getDb();
+  const planCount = async (status: (typeof plans.status.enumValues)[number]) =>
+    (await db.select({ n: count() }).from(plans).where(and(eq(plans.unitId, unitId), eq(plans.status, status))))[0]!.n;
+  const [myProposals, toConsolidate, toSource, drafts] = await Promise.all([
+    user.activeRole === "COMPONENT_OFFICER"
+      ? db
+          .select({ n: count() })
+          .from(planComponents)
+          .innerJoin(plans, eq(plans.id, planComponents.planId))
+          .where(and(eq(planComponents.coUserId, user.id), inArray(planComponents.status, ["assigned", "in_progress", "returned"]), inArray(plans.status, ["proposing", "consolidating"])))
+          .then((r) => r[0]!.n)
+      : 0,
+    user.activeRole === "INITIATING_OFFICER" ? planCount("consolidating") : 0,
+    user.activeRole === "UNIT_OFFICER" ? planCount("sourcing") : 0,
+    user.activeRole === "INITIATING_OFFICER" ? planCount("draft") : 0,
+  ]);
   const st = stationIds ? inArray(transferRequests.fromStationId, stationIds.length ? stationIds : NONE) : undefined;
   const [[transfers], [noIncharge], [points]] = await Promise.all([
     db.select({ n: count() }).from(transferRequests).where(and(eq(transferRequests.unitId, unitId), eq(transferRequests.status, "pending"), st)),
     db.select({ n: count() }).from(stations).where(and(eq(stations.unitId, unitId), isNull(stations.inchargePersonId))),
     db.select({ n: count() }).from(deploymentPoints).where(and(eq(deploymentPoints.unitId, unitId), eq(deploymentPoints.isActive, true))),
   ]);
-  return { pendingTransfers: transfers!.n, stationsWithoutIncharge: noIncharge!.n, points: points!.n };
+  return { pendingTransfers: transfers!.n, stationsWithoutIncharge: noIncharge!.n, points: points!.n, myProposals, toConsolidate, toSource, drafts };
 }

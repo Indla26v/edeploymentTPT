@@ -4,9 +4,8 @@ import { refresh } from "next/cache";
 import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
-import { divisions, persons, ranks, roleAssignments, stations, units, users } from "@/lib/db/schema";
-import { insertUserWithPassword } from "@/lib/auth/accounts";
-import { generateTempPassword, usernameForOfficer } from "@/lib/auth/passwords";
+import { divisions, persons, ranks, roleAssignments, stations } from "@/lib/db/schema";
+import { ensureLoginForPerson } from "@/lib/auth/ensure-login";
 import { requireUser } from "@/lib/auth/session";
 import { UserError, assertUnit, isStateLevel } from "@/lib/authz/authorize";
 import { searchPersons } from "@/lib/queries/persons";
@@ -110,7 +109,7 @@ export async function assignInchargeAction(stationId: string, personId: string) 
       if (!st) throw new UserError("That station no longer exists.");
       assertUnit(user, st.unitId);
       const [p] = await tx
-        .select({ id: persons.id, name: persons.name, genNo: persons.genNo, unitId: persons.unitId, rank: ranks.code })
+        .select({ id: persons.id, name: persons.name, unitId: persons.unitId, rank: ranks.code })
         .from(persons)
         .innerJoin(ranks, eq(ranks.id, persons.rankId))
         .where(eq(persons.id, data.personId))
@@ -121,24 +120,15 @@ export async function assignInchargeAction(stationId: string, personId: string) 
       // Remove the station-scoped OI role from whoever held it.
       await tx.delete(roleAssignments).where(and(eq(roleAssignments.role, "OFFICE_INCHARGE"), eq(roleAssignments.stationId, data.stationId)));
 
-      let [login] = await tx.select({ id: users.id, username: users.username }).from(users).where(eq(users.personId, p.id)).limit(1);
-      let tempPassword: string | null = null;
-      if (!login) {
-        const [unit] = await tx.select({ code: units.code }).from(units).where(eq(units.id, p.unitId)).limit(1);
-        let username = usernameForOfficer(unit?.code ?? "unit", p.genNo);
-        const [taken] = await tx.select({ id: users.id }).from(users).where(eq(users.username, username)).limit(1);
-        if (taken) username = `${username}-${Math.floor(Math.random() * 900 + 100)}`;
-        tempPassword = generateTempPassword();
-        const { userId } = await insertUserWithPassword(tx, { username, name: p.name, personId: p.id, password: tempPassword, mustChangePassword: true });
-        login = { id: userId, username };
-      }
-      await tx.insert(roleAssignments).values({ userId: login.id, role: "OFFICE_INCHARGE", unitId: st.unitId, stationId: st.id, createdBy: user.id });
+      const login = await ensureLoginForPerson(tx, p.id);
+      const tempPassword = login.tempPassword;
+      await tx.insert(roleAssignments).values({ userId: login.userId, role: "OFFICE_INCHARGE", unitId: st.unitId, stationId: st.id, createdBy: user.id });
       await tx.update(stations).set({ inchargePersonId: p.id }).where(eq(stations.id, st.id));
-      await notifyUser(tx, login.id, { title: `You are now Office Incharge of ${st.name}`, body: "Force requests for your station will appear under Station → Force requests.", href: "/dashboard", kind: "action" });
-      await queueMessage(tx, { template: "oi.assigned", toUserId: login.id, payload: { station: st.name } });
+      await notifyUser(tx, login.userId, { title: `You are now Office Incharge of ${st.name}`, body: "Force requests for your station will appear under Station → Force requests.", href: "/dashboard", kind: "action" });
+      await queueMessage(tx, { template: "oi.assigned", toUserId: login.userId, payload: { station: st.name } });
       await audit({ action: "station.assign_incharge", entity: "station", entityId: st.id, before: { inchargePersonId: st.inchargePersonId }, after: { inchargePersonId: p.id, userCreated: !!tempPassword } });
       refresh();
-      return { username: login.username ?? "", tempPassword };
+      return { username: login.username, tempPassword };
     },
   });
 }

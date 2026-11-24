@@ -39,7 +39,7 @@ async function DashboardData() {
   let attention: Awaited<ReturnType<typeof getAttention>>;
   const stationIds = scopeStationIds(user);
   try {
-    [data, attention] = await Promise.all([getUnitDashboard(user.unitId, stationIds), getAttention(user.unitId, stationIds)]);
+    [data, attention] = await Promise.all([getUnitDashboard(user.unitId, stationIds), getAttention(user, user.unitId, stationIds)]);
   } catch (err) {
     console.error("dashboard query failed", err);
     return (
@@ -58,6 +58,11 @@ async function DashboardData() {
   const availablePct = totals.persons ? Math.round((totals.available / totals.persons) * 100) : 0;
 
   const actions: { label: string; href: string; tone: "warning" | "info" }[] = [];
+  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  if (attention.myProposals) actions.push({ label: `${plural(attention.myProposals, "proposal", "proposals")} to submit`, href: "/plans", tone: "warning" });
+  if (attention.toConsolidate) actions.push({ label: `${plural(attention.toConsolidate, "plan", "plans")} ready to consolidate`, href: "/plans", tone: "warning" });
+  if (attention.toSource) actions.push({ label: `${plural(attention.toSource, "plan needs", "plans need")} force sourcing`, href: "/plans", tone: "warning" });
+  if (attention.drafts) actions.push({ label: `${plural(attention.drafts, "draft plan", "draft plans")} not sent yet`, href: "/plans", tone: "info" });
   if (attention.pendingTransfers && can(user, "transfers.approve")) actions.push({ label: `${attention.pendingTransfers} transfer request${attention.pendingTransfers > 1 ? "s" : ""} to review`, href: "/masters/transfers", tone: "warning" });
   else if (attention.pendingTransfers && can(user, "transfers.request")) actions.push({ label: `${attention.pendingTransfers} transfer request${attention.pendingTransfers > 1 ? "s" : ""} awaiting approval`, href: "/masters/transfers", tone: "info" });
   if (attention.stationsWithoutIncharge && can(user, "masters.stations.manage")) actions.push({ label: `${attention.stationsWithoutIncharge} station${attention.stationsWithoutIncharge > 1 ? "s" : ""} without an Office Incharge`, href: "/masters/stations", tone: "warning" });

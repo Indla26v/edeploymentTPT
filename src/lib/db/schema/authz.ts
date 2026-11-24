@@ -3,6 +3,7 @@ import { boolean, index, integer, jsonb, pgEnum, pgTable, primaryKey, text, time
 import { ROLES } from "../../authz/roles";
 import { users } from "./auth";
 import { stations, units } from "./org";
+import { planComponents, plans } from "./plans";
 
 export const roleEnum = pgEnum("role", ROLES);
 
@@ -21,8 +22,8 @@ export const roleAssignments = pgTable(
     role: roleEnum().notNull(),
     unitId: uuid().references(() => units.id, { onDelete: "cascade" }),
     stationId: uuid().references(() => stations.id, { onDelete: "cascade" }),
-    planId: uuid(),
-    planComponentId: uuid(),
+    planId: uuid().references(() => plans.id, { onDelete: "cascade" }),
+    planComponentId: uuid().references(() => planComponents.id, { onDelete: "cascade" }),
     departmentId: uuid(),
     isActive: boolean().notNull().default(true),
     createdBy: uuid().references(() => users.id, { onDelete: "set null" }),

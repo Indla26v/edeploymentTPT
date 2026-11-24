@@ -43,6 +43,13 @@ export const STATUS_META = {
   published: { label: "Published", tone: "success", icon: Send },
   live: { label: "Live", tone: "danger", icon: Radio },
   completed: { label: "Completed", tone: "success", icon: CircleCheck },
+  assigned: { label: "Not started", tone: "neutral", icon: CircleDashed },
+  in_progress: { label: "In progress", tone: "info", icon: CircleDot },
+  proposing: { label: "Proposals open", tone: "info", icon: Send },
+  consolidating: { label: "Consolidating", tone: "primary", icon: CircleDot },
+  sourcing: { label: "Force sourcing", tone: "warning", icon: Hourglass },
+  placement: { label: "Placement", tone: "primary", icon: Sparkles },
+  cancelled: { label: "Cancelled", tone: "neutral", icon: XCircle },
 } satisfies Record<string, { label: string; tone: Tone; icon: LucideIcon }>;
 
 export type Status = keyof typeof STATUS_META;
