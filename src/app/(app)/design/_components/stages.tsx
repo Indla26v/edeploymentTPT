@@ -4,7 +4,7 @@ import { Stepper } from "@/components/stepper";
 
 export function Stages() {
   return (
-    <div className="grid gap-5">
+    <div className="grid gap-4">
       <Card>
         <CardHeader>
           <CardTitle>Plan stage tracker</CardTitle>

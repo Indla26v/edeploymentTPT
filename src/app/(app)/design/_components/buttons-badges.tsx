@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 
 export function ButtonsAndBadges() {
   return (
-    <div className="grid gap-5 lg:grid-cols-2">
+    <div className="grid gap-4 lg:grid-cols-2">
       <Card>
         <CardContent className="space-y-5">
           <div className="flex flex-wrap items-center gap-2.5">

@@ -57,16 +57,27 @@ function writeRole(role: Role) {
 export function RoleProvider({
   roles,
   defaultRole,
+  onChange,
   children,
 }: {
   roles: Role[];
   defaultRole: Role;
+  /** Server action persisting the active role on the session; authz always re-reads it server-side. */
+  onChange?: (role: Role) => Promise<void>;
   children: React.ReactNode;
 }) {
   const saved = React.useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-  const activeRole = saved && (roles as string[]).includes(saved) ? (saved as Role) : defaultRole;
+  // When a server action owns the active role, the server-provided default wins.
+  const activeRole = !onChange && saved && (roles as string[]).includes(saved) ? (saved as Role) : defaultRole;
 
-  const value = React.useMemo(() => ({ roles, activeRole, setActiveRole: writeRole }), [roles, activeRole]);
+  const setActiveRole = React.useCallback(
+    (role: Role) => {
+      writeRole(role);
+      void onChange?.(role);
+    },
+    [onChange],
+  );
+  const value = React.useMemo(() => ({ roles, activeRole, setActiveRole }), [roles, activeRole, setActiveRole]);
   return <RoleContext value={value}>{children}</RoleContext>;
 }
 

@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import Link from "next/link";
 
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ButtonsAndBadges } from "./_components/buttons-badges";
 import { Feedback } from "./_components/feedback";
 import { FormsDemo } from "./_components/forms-demo";
@@ -30,15 +32,15 @@ const SECTIONS = [
 
 export default function DesignPage() {
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
       <PageHeader
         title="Design system"
-        description="Clean and modern: rounded surfaces, pill-shaped buttons, status that never relies on colour alone, light and dark mode. Everything below is live — try the ledger and drag officers on the placement board."
+        description="Clean, light and compact: rounded surfaces, pill-shaped buttons, status that never relies on colour alone. Everything below is live — try the ledger and drag officers on the placement board."
         breadcrumb={[{ label: "Home", href: "/dashboard" }, { label: "Design system" }]}
         actions={<Badge tone="info" className="py-1">Phase 1 · for sign-off</Badge>}
       />
 
-      <nav aria-label="Sections" className="sticky top-16 z-20 -mx-4 overflow-x-auto bg-background/80 px-4 py-2 backdrop-blur-md sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
+      <nav aria-label="Sections" className="sticky top-14 z-20 -mx-4 overflow-x-auto bg-background/85 px-4 py-2 backdrop-blur-md sm:-mx-5 sm:px-5 lg:-mx-6 lg:px-6">
         <ul className="flex w-max gap-1.5">
           {SECTIONS.map((s) => (
             <li key={s.id}>
@@ -53,7 +55,7 @@ export default function DesignPage() {
         </ul>
       </nav>
 
-      <Section id="foundations" title="Foundations" description="Colour tokens, shape and type. Every token has a dark-mode counterpart.">
+      <Section id="foundations" title="Foundations" description="Colour tokens, shape, type and density. Light theme only.">
         <Foundations />
       </Section>
       <Section id="actions" title="Buttons and status pills" description="All buttons are pills; icon buttons are circles. Workflow status always shows an icon and a label.">
@@ -69,7 +71,10 @@ export default function DesignPage() {
         <FormsDemo />
       </Section>
       <Section id="table" title="Data table" description="Search, filter pills, sorting, abstract, availability toggle, row actions and pagination — the pattern every master screen uses.">
-        <PersonsTable />
+        {/* TanStack Table reads the clock in dev builds, so it renders on the client after the static shell. */}
+        <Suspense fallback={<Skeleton className="h-[460px] rounded-2xl" />}>
+          <PersonsTable />
+        </Suspense>
       </Section>
       <Section
         id="sourcing"

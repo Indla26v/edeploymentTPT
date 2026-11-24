@@ -7,7 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export function Feedback() {
   return (
-    <div className="grid gap-5 lg:grid-cols-2">
+    <div className="grid gap-4 lg:grid-cols-2">
       <Card>
         <CardContent className="space-y-4">
           <p className="text-sm font-medium">Loading skeleton</p>

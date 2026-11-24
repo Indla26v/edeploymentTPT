@@ -342,8 +342,8 @@ export function PlacementDemo() {
     SAMPLE_SLOTS.filter((s) => !assignments[s.id] && checkPlacement(o, s, pointById.get(s.pointId)!).ok);
 
   return (
-    <DndContext sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setActiveOfficer(null)}>
-      <div className="grid gap-5 lg:grid-cols-[340px_1fr]">
+    <DndContext id="placement-board-demo" sensors={sensors} onDragStart={onDragStart} onDragEnd={onDragEnd} onDragCancel={() => setActiveOfficer(null)}>
+      <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
         <Card className="h-fit gap-4 py-5 lg:sticky lg:top-24">
           <CardHeader className="px-5">
             <CardTitle>Officer pool</CardTitle>

@@ -1,7 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 
-import { Card } from "@/components/ui/card";
 import { cn, formatNumber } from "@/lib/utils";
 
 const iconTone = {
@@ -12,6 +11,7 @@ const iconTone = {
   info: "bg-info-soft text-info-soft-foreground",
 } as const;
 
+/** Compact horizontal KPI: icon left, label + number right (~84px tall). Optional link makes the whole card clickable. */
 export function KpiCard({
   label,
   value,
@@ -19,6 +19,7 @@ export function KpiCard({
   tone = "primary",
   hint,
   trend,
+  href,
   className,
 }: {
   label: string;
@@ -27,35 +28,48 @@ export function KpiCard({
   tone?: keyof typeof iconTone;
   hint?: string;
   trend?: { value: string; direction: "up" | "down"; good?: boolean };
+  href?: string;
   className?: string;
 }) {
-  return (
-    <Card className={cn("gap-3 p-4 transition-shadow hover:shadow-lifted sm:gap-4 sm:p-5", className)}>
-      <div className="flex items-start justify-between gap-3">
-        <span className={cn("inline-flex size-10 items-center justify-center rounded-2xl sm:size-11", iconTone[tone])}>
-          <Icon className="size-5" aria-hidden />
-        </span>
-        {trend && (
-          <span
-            className={cn(
-              "inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-medium",
-              (trend.good ?? trend.direction === "up")
-                ? "bg-success-soft text-success-soft-foreground"
-                : "bg-danger-soft text-danger-soft-foreground",
-            )}
-          >
-            {trend.direction === "up" ? <ArrowUpRight className="size-3.5" /> : <ArrowDownRight className="size-3.5" />}
-            {trend.value}
-          </span>
-        )}
+  const body = (
+    <>
+      <span className={cn("inline-flex size-10 shrink-0 items-center justify-center rounded-xl", iconTone[tone])}>
+        <Icon className="size-5" aria-hidden />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-xs text-muted-foreground">{label}</p>
+        <div className="flex items-baseline gap-2">
+          <p className="tabular text-2xl leading-tight font-semibold tracking-tight">
+            {typeof value === "number" ? formatNumber(value) : value}
+          </p>
+          {trend && (
+            <span
+              className={cn(
+                "inline-flex items-center gap-0.5 rounded-full px-1.5 text-[11px] font-medium",
+                (trend.good ?? trend.direction === "up")
+                  ? "bg-success-soft text-success-soft-foreground"
+                  : "bg-danger-soft text-danger-soft-foreground",
+              )}
+            >
+              {trend.direction === "up" ? <ArrowUpRight className="size-3" /> : <ArrowDownRight className="size-3" />}
+              {trend.value}
+            </span>
+          )}
+        </div>
+        {hint && <p className="truncate text-[11px] text-muted-foreground">{hint}</p>}
       </div>
-      <div className="space-y-1">
-        <p className="text-[13px] leading-snug text-muted-foreground sm:text-sm">{label}</p>
-        <p className="tabular text-2xl font-semibold tracking-tight sm:text-3xl">
-          {typeof value === "number" ? formatNumber(value) : value}
-        </p>
-        {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
-      </div>
-    </Card>
+    </>
+  );
+  const cls = cn(
+    "flex min-h-[84px] min-w-0 items-center gap-3 rounded-2xl border border-border/70 bg-card px-4 py-3 shadow-soft transition-shadow",
+    href && "hover:border-primary/30 hover:shadow-lifted focus-visible:ring-[3px] focus-visible:ring-ring/40 focus-visible:outline-none",
+    className,
+  );
+  return href ? (
+    <a href={href} className={cls}>
+      {body}
+    </a>
+  ) : (
+    <div className={cls}>{body}</div>
   );
 }

@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { CircleCheck, MapPinned, ShieldCheck, Users } from "lucide-react";
 
 import { BrandMark } from "@/components/shell/brand";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { LoginForm } from "./login-form";
 
 export const metadata: Metadata = { title: "Sign in" };
@@ -50,7 +49,6 @@ export default function LoginPage() {
             <BrandMark className="size-8" />
             <span className="font-semibold tracking-tight">eDeployment</span>
           </div>
-          <ThemeToggle />
         </div>
         <div className="flex flex-1 items-center justify-center px-5 pb-16">
           <LoginForm />

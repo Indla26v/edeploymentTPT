@@ -33,7 +33,7 @@ export function FormsDemo() {
   const [sheetOpen, setSheetOpen] = React.useState(false);
 
   return (
-    <div className="grid gap-5 lg:grid-cols-2">
+    <div className="grid gap-4 lg:grid-cols-2">
       <Card>
         <CardHeader>
           <CardTitle>Form controls</CardTitle>
