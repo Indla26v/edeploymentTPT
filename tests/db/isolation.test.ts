@@ -45,13 +45,16 @@ describe.skipIf(!url)("unit isolation", () => {
   }, 120_000);
   afterAll(async () => end?.());
 
-  it("sees no persons, stations, points, transfers or plans of another unit", async () => {
+  it("sees only its own persons and stations, and nothing of another unit's points, transfers or plans", async () => {
     const u = actor.current!;
-    expect(await listPersons(u)).toEqual([]);
-    expect(await listStations(u)).toEqual([]);
+    const persons = await listPersons(u);
+    expect(persons.length).toBeGreaterThan(0);
+    const demoStations = new Set((await db.execute<{ name: string }>(`select s.name from stations s join units u on u.id = s.unit_id where u.code = 'DEMO-DIST'` as never)).rows.map((r) => r.name));
+    expect(persons.every((p) => !demoStations.has(p.station))).toBe(true);
+    expect((await listStations(u)).every((s) => !demoStations.has(s.name))).toBe(true);
+    expect((await searchPersons(u, "")).every((p) => !demoStations.has(p.station))).toBe(true);
     expect(await listPoints(u)).toEqual([]);
     expect(await listTransfers(u)).toEqual([]);
-    expect(await searchPersons(u, "")).toEqual([]);
     expect(await listPlans(u, "ongoing")).toEqual([]);
   });
 
@@ -75,8 +78,8 @@ describe.skipIf(!url)("unit isolation", () => {
     await actAs(db, "om");
     const omTasks = await listTasks(actor.current!);
     const [north] = await db.select().from(units).where(eq(units.code, "NORTH-DIST"));
-    const d = await getUnitDashboard(north!.id);
-    expect(d?.totals.persons ?? 0).toBe(0);
+    const [demo] = await db.select().from(units).where(eq(units.code, "DEMO-DIST"));
+    expect((await getUnitDashboard(north!.id))!.totals.persons).toBeLessThan((await getUnitDashboard(demo!.id))!.totals.persons);
     expect(omTasks.every((t) => t.unitId === actor.current!.unitId)).toBe(true);
   });
 });

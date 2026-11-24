@@ -10,7 +10,7 @@
  * development branch), so a cloud database is never wiped by accident.
  */
 import { fakerEN_IN as faker } from "@faker-js/faker";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { insertUserWithPassword } from "../src/lib/auth/accounts";
 import { PERMISSIONS } from "../src/lib/authz/permissions";
@@ -20,7 +20,7 @@ import { divisions, permissions, persons, ranks, roleAssignments, rolePermission
 import { DEMO_PASSWORD } from "../src/lib/demo-accounts";
 import { scriptDatabaseUrl } from "./env";
 import { seedMasters } from "./seed-masters";
-import { AGE_BAND, DEMO_UNIT, DIVISIONS, OTHER_UNITS, RANKS, SEED_REFERENCE_DATE } from "./seed-data";
+import { AGE_BAND, APSP_DIVISIONS, DEMO_UNIT, DIVISIONS, NORTH_DIVISIONS, OTHER_UNITS, RANKS, SEED_REFERENCE_DATE } from "./seed-data";
 
 if (process.env.NODE_ENV === "production" || process.env.VERCEL_ENV === "production") {
   console.error("Refusing to seed a production environment.");
@@ -66,58 +66,62 @@ export async function seed(url: string) {
         .insert(units)
         .values({ ...DEMO_UNIT, displayOrder: 1, officerDesignation: "Superintendent of Police" })
         .returning();
-      await tx.insert(units).values(OTHER_UNITS.map((u, i) => ({ ...u, displayOrder: i + 2 })));
+      const others = await tx.insert(units).values(OTHER_UNITS.map((u, i) => ({ ...u, displayOrder: i + 2 }))).returning();
+      const unitOf = (code: string) => others.find((u) => u.code === code)!;
 
-      let genNo = 1001;
       let order = 1;
       let total = 0;
+      const seniorityOf = new Map(rankRows.map((r) => [r.id, r.seniority]));
 
-      for (const div of DIVISIONS) {
-        const [division] = await tx.insert(divisions).values({ unitId: demo!.id, name: div.name }).returning();
-        for (const st of div.stations) {
-          const [station] = await tx
-            .insert(stations)
-            .values({ unitId: demo!.id, divisionId: division!.id, code: st.code, name: st.name, kind: st.kind, lat: st.lat, lng: st.lng, displayOrder: order++ })
-            .returning();
-
-          const rows: (typeof persons.$inferInsert)[] = [];
-          for (const [rankCode, count] of Object.entries(st.strength)) {
-            const [minAge, maxAge] = AGE_BAND[rankCode] ?? [25, 55];
-            for (let i = 0; i < count; i++) {
-              const isFemale = faker.number.float() < (st.femaleShare ?? (rankCode.includes("AR") ? 0.08 : 0.16));
-              const sex = isFemale ? "female" : "male";
-              const age = faker.number.int({ min: minAge, max: maxAge });
-              const lightDuty = faker.number.float() < (age >= 50 ? 0.25 : 0.03);
-              const roll = faker.number.float();
-              rows.push({
-                unitId: demo!.id,
-                stationId: station!.id,
-                rankId: rankId.get(rankCode)!,
-                genNo: String(genNo++),
-                name: faker.person.fullName({ sex }),
-                gender: sex,
-                dob: dobForAge(age),
-                phone: phone(),
-                fitness: lightDuty ? "light_duty_only" : "fit",
-                availability: roll < 0.88 ? "available" : roll < 0.94 ? "on_leave" : roll < 0.97 ? "medical_leave" : "other",
-              });
+      /** Stations and officers for one unit (ages, gender, fitness and availability vary realistically). */
+      const addUnitStrength = async (unitId: string, divs: typeof DIVISIONS, firstGenNo: number) => {
+        let genNo = firstGenNo;
+        for (const div of divs) {
+          const [division] = await tx.insert(divisions).values({ unitId, name: div.name }).returning();
+          for (const st of div.stations) {
+            const [station] = await tx
+              .insert(stations)
+              .values({ unitId, divisionId: division!.id, code: st.code, name: st.name, kind: st.kind, lat: st.lat, lng: st.lng, displayOrder: order++ })
+              .returning();
+            const rows: (typeof persons.$inferInsert)[] = [];
+            for (const [rankCode, count] of Object.entries(st.strength)) {
+              const [minAge, maxAge] = AGE_BAND[rankCode] ?? [25, 55];
+              for (let i = 0; i < count; i++) {
+                const isFemale = faker.number.float() < (st.femaleShare ?? (rankCode.includes("AR") ? 0.08 : 0.16));
+                const sex = isFemale ? "female" : "male";
+                const age = faker.number.int({ min: minAge, max: maxAge });
+                const lightDuty = faker.number.float() < (age >= 50 ? 0.25 : 0.03);
+                const roll = faker.number.float();
+                rows.push({
+                  unitId,
+                  stationId: station!.id,
+                  rankId: rankId.get(rankCode)!,
+                  genNo: String(genNo++),
+                  name: faker.person.fullName({ sex }),
+                  gender: sex,
+                  dob: dobForAge(age),
+                  phone: phone(),
+                  fitness: lightDuty ? "light_duty_only" : "fit",
+                  availability: roll < 0.88 ? "available" : roll < 0.94 ? "on_leave" : roll < 0.97 ? "medical_leave" : "other",
+                });
+              }
             }
+            const inserted = await tx.insert(persons).values(rows).returning({ id: persons.id, rankId: persons.rankId });
+            total += inserted.length;
+            // Office Incharge: the most senior officer present.
+            const incharge = [...inserted].sort((a, b) => seniorityOf.get(a.rankId)! - seniorityOf.get(b.rankId)!)[0];
+            if (incharge) await tx.update(stations).set({ inchargePersonId: incharge.id }).where(eq(stations.id, station!.id));
           }
-          const inserted = await tx.insert(persons).values(rows).returning({ id: persons.id, rankId: persons.rankId });
-          total += inserted.length;
-
-          // Office Incharge: the CI of a police station, else the most senior officer present.
-          const seniorityOf = new Map(rankRows.map((r) => [r.id, r.seniority]));
-          const incharge = [...inserted].sort((a, b) => seniorityOf.get(a.rankId)! - seniorityOf.get(b.rankId)!)[0];
-          if (incharge) await tx.update(stations).set({ inchargePersonId: incharge.id }).where(eq(stations.id, station!.id));
         }
-      }
+      };
+
+      await addUnitStrength(demo!.id, DIVISIONS, 1001);
 
       // Unit officer on the unit record = the SP in the District Police Office.
       const [sp] = await tx
         .select({ name: persons.name, phone: persons.phone })
         .from(persons)
-        .where(eq(persons.rankId, rankId.get("SP")!))
+        .where(and(eq(persons.rankId, rankId.get("SP")!), eq(persons.unitId, demo!.id)))
         .limit(1);
       if (sp) await tx.update(units).set({ officerName: sp.name, officerPhone: sp.phone }).where(eq(units.id, demo!.id));
 
@@ -164,8 +168,35 @@ export async function seed(url: string) {
 
       const m = await seedMasters(tx, demo!.id, userIdOf.get("sho.town1") ?? null);
 
+      // Another district and an APSP battalion, with their own Unit Officer / Office Incharge logins.
+      const north = unitOf("NORTH-DIST");
+      const apsp = unitOf("APSP-1");
+      const demoPersons = total;
+      await addUnitStrength(north.id, NORTH_DIVISIONS, 5001);
+      await addUnitStrength(apsp.id, APSP_DIVISIONS, 7001);
+      const unitPerson = async (unitId: string, where: ReturnType<typeof sql>) =>
+        (await tx.execute<{ id: string; name: string }>(sql`select p.id, p.name from persons p join ranks r on r.id = p.rank_id join stations s on s.id = p.station_id where p.unit_id = ${unitId} and ${where} order by p.gen_no::int limit 1`)).rows[0];
+      const more: { username: string; person?: { id: string; name: string }; name?: string; role: Role; unitId: string | null; stationCode?: string }[] = [
+        { username: "dgp", name: "Director General of Police (demo)", role: "DGP", unitId: null },
+        { username: "sp.north", person: await unitPerson(north.id, sql`r.code = 'SP'`), role: "UNIT_OFFICER", unitId: north.id },
+        { username: "sho.north1", person: await unitPerson(north.id, sql`p.id = (select incharge_person_id from stations where code = 'NPS-1')`), role: "OFFICE_INCHARGE", unitId: north.id, stationCode: "NPS-1" },
+        { username: "comdt.apsp", person: await unitPerson(apsp.id, sql`r.code = 'Comdt'`), role: "UNIT_OFFICER", unitId: apsp.id },
+      ];
+      for (const d of more) {
+        const { userId } = await insertUserWithPassword(tx, { username: d.username, name: d.person?.name ?? d.name ?? d.username, personId: d.person?.id ?? null, password: DEMO_PASSWORD, mustChangePassword: false });
+        const stationIdFor = d.stationCode ? (await tx.select({ id: stations.id }).from(stations).where(and(eq(stations.code, d.stationCode), eq(stations.unitId, d.unitId!))).limit(1))[0]!.id : null;
+        await tx.insert(roleAssignments).values({ userId, role: d.role, unitId: d.unitId, stationId: stationIdFor });
+      }
+      for (const [u, code] of [
+        [north, "NDPO"],
+        [apsp, "APSP-HQ"],
+      ] as const) {
+        const [lead] = (await tx.execute<{ name: string; phone: string | null }>(sql`select p.name, p.phone from persons p join stations s on s.id = p.station_id where s.code = ${code} and p.id = s.incharge_person_id`)).rows;
+        if (lead) await tx.update(units).set({ officerName: lead.name, officerPhone: lead.phone, officerDesignation: u.code === "APSP-1" ? "Commandant" : "Superintendent of Police" }).where(eq(units.id, u.id));
+      }
+
       console.log(
-        `Seeded ${m.points} deployment points, ${m.stock} equipment stock rows; ${rankRows.length} ranks, ${OTHER_UNITS.length + 1} units, ${DIVISIONS.length} divisions, ${order - 1} stations, ${total} persons, ${PERMISSIONS.length} permissions, ${demos.length} demo users.`,
+        `Seeded ${m.points} deployment points, ${m.stock} equipment stock rows; ${rankRows.length} ranks, ${OTHER_UNITS.length + 1} units, ${order - 1} stations, ${demoPersons} persons in the demo district (${total} in all), ${PERMISSIONS.length} permissions, ${demos.length + more.length} demo users.`,
       );
     });
   } finally {

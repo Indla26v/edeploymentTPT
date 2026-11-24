@@ -81,6 +81,25 @@ export const DIVISIONS: { name: string; stations: StationSeed[] }[] = [
   },
 ];
 
+/** A second district and an APSP battalion, so inter-district requests (DGP) have somewhere to come from. */
+export const NORTH_DIVISIONS: { name: string; stations: StationSeed[] }[] = [
+  {
+    name: "North Division",
+    stations: [
+      { code: "NPS-1", name: "North Town PS", kind: "police_station", lat: 16.9891, lng: 80.0971, strength: { CI: 1, SI: 3, ASI: 2, HC: 8, PC: 20, HG: 4 } },
+      { code: "NPS-2", name: "North Rural PS", kind: "police_station", lat: 17.0214, lng: 80.1432, strength: { CI: 1, SI: 2, ASI: 2, HC: 6, PC: 16, HG: 4 } },
+      { code: "NDPO", name: "North District Police Office", kind: "office", lat: 16.9952, lng: 80.1104, strength: { SP: 1, DSP: 1, SI: 1, HC: 2, PC: 3 } },
+    ],
+  },
+];
+
+export const APSP_DIVISIONS: { name: string; stations: StationSeed[] }[] = [
+  {
+    name: "Battalion",
+    stations: [{ code: "APSP-HQ", name: "APSP 1st Bn HQ", kind: "special_unit", lat: 16.5498, lng: 80.5821, strength: { Comdt: 1, "Asst.Comdt": 2, "RI(APSP)": 2, "RSI(APSP)": 6, "HC(APSP)": 20, "PC(APSP)": 60 }, femaleShare: 0.05 }],
+  },
+];
+
 /** Age bands per rank (min, max) used to generate realistic dates of birth. */
 export const AGE_BAND: Record<string, [number, number]> = {
   SP: [36, 55],

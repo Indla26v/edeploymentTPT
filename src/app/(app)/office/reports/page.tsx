@@ -95,7 +95,7 @@ async function Reports({ searchParams }: PageProps<"/office/reports">) {
             <CardTitle>Person-wise analysis</CardTitle>
             <CardDescription>Completion rate and average time to first action.</CardDescription>
           </CardHeader>
-          <CardContent className="overflow-x-auto">
+          <CardContent className="relative overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-[11px] tracking-wide text-muted-foreground uppercase">

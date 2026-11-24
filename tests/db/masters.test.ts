@@ -80,10 +80,11 @@ describe.skipIf(!url)("masters server actions", () => {
 
   it("stations: drag reorder persists the new order", async () => {
     await as("sp", "UNIT_OFFICER");
-    const before = await db.select({ id: stations.id }).from(stations).orderBy(stations.displayOrder);
+    const unitId = actor.current!.unitId!;
+    const before = await db.select({ id: stations.id }).from(stations).where(eq(stations.unitId, unitId)).orderBy(stations.displayOrder);
     const reversed = before.map((s) => s.id).reverse();
     expect(await reorderStationsAction(reversed)).toMatchObject({ ok: true });
-    const after = await db.select({ id: stations.id }).from(stations).orderBy(stations.displayOrder);
+    const after = await db.select({ id: stations.id }).from(stations).where(eq(stations.unitId, unitId)).orderBy(stations.displayOrder);
     expect(after.map((s) => s.id)).toEqual(reversed);
   });
 

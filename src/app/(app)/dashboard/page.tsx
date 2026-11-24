@@ -2,19 +2,45 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import Link from "next/link";
-import { ArrowRight, BellRing, Building2, Database, HeartPulse, UserCheck, Users } from "lucide-react";
+import {
+  ArrowRight,
+  BellRing,
+  Building2,
+  Database,
+  HeartPulse,
+  UserCheck,
+  Users,
+} from "lucide-react";
 
 import { EmptyState } from "@/components/empty-state";
 import { KpiCard } from "@/components/kpi-card";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { requireUser } from "@/lib/auth/session";
 import { ROLE_LABEL } from "@/lib/authz/roles";
-import { getAttention, getStateOverview, getUnitDashboard } from "@/lib/queries/dashboard";
+import {
+  getAttention,
+  getStateOverview,
+  getUnitDashboard,
+} from "@/lib/queries/dashboard";
+import { interDistrictCounts } from "@/lib/queries/interdistrict";
 import { can, scopeStationIds } from "@/lib/authz/authorize";
 import { formatNumber } from "@/lib/utils";
 import { OfficeDashboard } from "./office-dashboard";
@@ -24,7 +50,10 @@ export const metadata: Metadata = { title: "Dashboard" };
 export default function DashboardPage() {
   return (
     <div className="space-y-4">
-      <PageHeader title="Dashboard" description="What needs your attention, and how your unit stands." />
+      <PageHeader
+        title="Dashboard"
+        description="What needs your attention, and how your unit stands."
+      />
       <Suspense fallback={<DashboardSkeleton />}>
         <DashboardData />
       </Suspense>
@@ -35,13 +64,21 @@ export default function DashboardPage() {
 async function DashboardData() {
   await connection();
   const user = await requireUser();
-  if (!user.unitId) return <StateOverview />;
-  if (user.activeRole === "OFFICE_MANAGER" || user.activeRole === "EMPLOYEE") return <OfficeDashboard user={user} />;
+  if (!user.unitId) return <StateOverview user={user} />;
+  if (user.activeRole === "OFFICE_MANAGER" || user.activeRole === "EMPLOYEE")
+    return <OfficeDashboard user={user} />;
   let data: Awaited<ReturnType<typeof getUnitDashboard>>;
   let attention: Awaited<ReturnType<typeof getAttention>>;
+  let inter: Awaited<ReturnType<typeof interDistrictCounts>> | null;
   const stationIds = scopeStationIds(user);
   try {
-    [data, attention] = await Promise.all([getUnitDashboard(user.unitId, stationIds), getAttention(user, user.unitId, stationIds)]);
+    [data, attention, inter] = await Promise.all([
+      getUnitDashboard(user.unitId, stationIds),
+      getAttention(user, user.unitId, stationIds),
+      user.activeRole === "UNIT_OFFICER" && can(user, "force.respond_unit")
+        ? interDistrictCounts(user)
+        : null,
+    ]);
   } catch (err) {
     console.error("dashboard query failed", err);
     return (
@@ -53,39 +90,136 @@ async function DashboardData() {
     );
   }
   if (!data) {
-    return <EmptyState icon={Database} title={`No data for ${ROLE_LABEL[user.activeRole]}`} description="Your unit has no stations or officers yet." />;
+    return (
+      <EmptyState
+        icon={Database}
+        title={`No data for ${ROLE_LABEL[user.activeRole]}`}
+        description="Your unit has no stations or officers yet."
+      />
+    );
   }
 
   const { totals, byRank, stations } = data;
-  const availablePct = totals.persons ? Math.round((totals.available / totals.persons) * 100) : 0;
+  const availablePct = totals.persons
+    ? Math.round((totals.available / totals.persons) * 100)
+    : 0;
 
-  const actions: { label: string; href: string; tone: "warning" | "info" }[] = [];
-  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
-  if (attention.myProposals) actions.push({ label: `${plural(attention.myProposals, "proposal", "proposals")} to submit`, href: "/plans", tone: "warning" });
-  if (attention.toConsolidate) actions.push({ label: `${plural(attention.toConsolidate, "plan", "plans")} ready to consolidate`, href: "/plans", tone: "warning" });
-  if (attention.toSource) actions.push({ label: `${plural(attention.toSource, "plan needs", "plans need")} force sourcing`, href: "/plans", tone: "warning" });
-  if (attention.toAnswer) actions.push({ label: `${plural(attention.toAnswer, "force request", "force requests")} to answer`, href: "/station/requests", tone: "warning" });
-  if (attention.toName) actions.push({ label: `${plural(attention.toName, "nominal roll", "nominal rolls")} to send`, href: "/station/requests", tone: "warning" });
-  if (attention.toPlace) actions.push({ label: user.activeRole === "COMPONENT_OFFICER" ? `${plural(attention.toPlace, "component", "components")} to place` : `${plural(attention.toPlace, "plan", "plans")} in placement — publish when ready`, href: "/plans", tone: "warning" });
-  if (attention.toVerify) actions.push({ label: `${plural(attention.toVerify, "task", "tasks")} to verify`, href: "/office/tasks", tone: "warning" });
-  if (attention.myTasks) actions.push({ label: `${plural(attention.myTasks, "task", "tasks")} assigned to you`, href: "/office/tasks", tone: "warning" });
-  if (attention.meetingsToday) actions.push({ label: `${plural(attention.meetingsToday, "meeting", "meetings")} today`, href: "/office/meetings", tone: "info" });
-  if (attention.drafts) actions.push({ label: `${plural(attention.drafts, "draft plan", "draft plans")} not sent yet`, href: "/plans", tone: "info" });
-  if (attention.pendingTransfers && can(user, "transfers.approve")) actions.push({ label: `${attention.pendingTransfers} transfer request${attention.pendingTransfers > 1 ? "s" : ""} to review`, href: "/masters/transfers", tone: "warning" });
-  else if (attention.pendingTransfers && can(user, "transfers.request")) actions.push({ label: `${attention.pendingTransfers} transfer request${attention.pendingTransfers > 1 ? "s" : ""} awaiting approval`, href: "/masters/transfers", tone: "info" });
-  if (attention.stationsWithoutIncharge && can(user, "masters.stations.manage")) actions.push({ label: `${attention.stationsWithoutIncharge} station${attention.stationsWithoutIncharge > 1 ? "s" : ""} without an Office Incharge`, href: "/masters/stations", tone: "warning" });
-  if (attention.points === 0 && can(user, "masters.points.manage")) actions.push({ label: "Add your deployment points library", href: "/masters/points", tone: "info" });
+  const actions: { label: string; href: string; tone: "warning" | "info" }[] =
+    [];
+  const plural = (n: number, one: string, many: string) =>
+    `${n} ${n === 1 ? one : many}`;
+  if (attention.myProposals)
+    actions.push({
+      label: `${plural(attention.myProposals, "proposal", "proposals")} to submit`,
+      href: "/plans",
+      tone: "warning",
+    });
+  if (attention.toConsolidate)
+    actions.push({
+      label: `${plural(attention.toConsolidate, "plan", "plans")} ready to consolidate`,
+      href: "/plans",
+      tone: "warning",
+    });
+  if (attention.toSource)
+    actions.push({
+      label: `${plural(attention.toSource, "plan needs", "plans need")} force sourcing`,
+      href: "/plans",
+      tone: "warning",
+    });
+  if (inter?.incoming)
+    actions.push({
+      label: `${plural(inter.incoming, "request", "requests")} from another district to answer`,
+      href: "/requirements/incoming",
+      tone: "warning",
+    });
+  if (attention.toAnswer)
+    actions.push({
+      label: `${plural(attention.toAnswer, "force request", "force requests")} to answer`,
+      href: "/station/requests",
+      tone: "warning",
+    });
+  if (attention.toName)
+    actions.push({
+      label: `${plural(attention.toName, "nominal roll", "nominal rolls")} to send`,
+      href: "/station/requests",
+      tone: "warning",
+    });
+  if (attention.toPlace)
+    actions.push({
+      label:
+        user.activeRole === "COMPONENT_OFFICER"
+          ? `${plural(attention.toPlace, "component", "components")} to place`
+          : `${plural(attention.toPlace, "plan", "plans")} in placement — publish when ready`,
+      href: "/plans",
+      tone: "warning",
+    });
+  if (attention.toVerify)
+    actions.push({
+      label: `${plural(attention.toVerify, "task", "tasks")} to verify`,
+      href: "/office/tasks",
+      tone: "warning",
+    });
+  if (attention.myTasks)
+    actions.push({
+      label: `${plural(attention.myTasks, "task", "tasks")} assigned to you`,
+      href: "/office/tasks",
+      tone: "warning",
+    });
+  if (attention.meetingsToday)
+    actions.push({
+      label: `${plural(attention.meetingsToday, "meeting", "meetings")} today`,
+      href: "/office/meetings",
+      tone: "info",
+    });
+  if (attention.drafts)
+    actions.push({
+      label: `${plural(attention.drafts, "draft plan", "draft plans")} not sent yet`,
+      href: "/plans",
+      tone: "info",
+    });
+  if (attention.pendingTransfers && can(user, "transfers.approve"))
+    actions.push({
+      label: `${attention.pendingTransfers} transfer request${attention.pendingTransfers > 1 ? "s" : ""} to review`,
+      href: "/masters/transfers",
+      tone: "warning",
+    });
+  else if (attention.pendingTransfers && can(user, "transfers.request"))
+    actions.push({
+      label: `${attention.pendingTransfers} transfer request${attention.pendingTransfers > 1 ? "s" : ""} awaiting approval`,
+      href: "/masters/transfers",
+      tone: "info",
+    });
+  if (attention.stationsWithoutIncharge && can(user, "masters.stations.manage"))
+    actions.push({
+      label: `${attention.stationsWithoutIncharge} station${attention.stationsWithoutIncharge > 1 ? "s" : ""} without an Office Incharge`,
+      href: "/masters/stations",
+      tone: "warning",
+    });
+  if (attention.points === 0 && can(user, "masters.points.manage"))
+    actions.push({
+      label: "Add your deployment points library",
+      href: "/masters/points",
+      tone: "info",
+    });
 
   return (
     <div className="space-y-4">
       {actions.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-card px-4 py-2.5 shadow-soft">
           <span className="flex items-center gap-1.5 text-sm font-medium">
-            <BellRing className="size-4 text-warning" aria-hidden /> Needs attention
+            <BellRing className="size-4 text-warning" aria-hidden /> Needs
+            attention
           </span>
           {actions.map((a) => (
-            <Link key={a.href + a.label} href={a.href} className="rounded-full focus-visible:ring-2 focus-visible:ring-ring">
-              <Badge tone={a.tone} className="h-7 px-3 text-xs hover:brightness-95">
+            <Link
+              key={a.href + a.label}
+              href={a.href}
+              className="rounded-full focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Badge
+                tone={a.tone}
+                className="h-7 px-3 text-xs hover:brightness-95"
+              >
                 {a.label} <ArrowRight className="size-3" aria-hidden />
               </Badge>
             </Link>
@@ -93,10 +227,32 @@ async function DashboardData() {
         </div>
       )}
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <KpiCard label="Police stations / offices" value={totals.stations} icon={Building2} />
-        <KpiCard label="Police persons" value={totals.persons} icon={Users} tone="info" hint={`${formatNumber(totals.women)} women officers`} />
-        <KpiCard label="Available for deployment" value={totals.available} icon={UserCheck} tone="success" hint={`${availablePct}% of strength`} />
-        <KpiCard label="Light duty only" value={totals.lightDuty} icon={HeartPulse} tone="warning" hint="Kept off high-intensity points" />
+        <KpiCard
+          label="Police stations / offices"
+          value={totals.stations}
+          icon={Building2}
+        />
+        <KpiCard
+          label="Police persons"
+          value={totals.persons}
+          icon={Users}
+          tone="info"
+          hint={`${formatNumber(totals.women)} women officers`}
+        />
+        <KpiCard
+          label="Available for deployment"
+          value={totals.available}
+          icon={UserCheck}
+          tone="success"
+          hint={`${availablePct}% of strength`}
+        />
+        <KpiCard
+          label="Light duty only"
+          value={totals.lightDuty}
+          icon={HeartPulse}
+          tone="warning"
+          hint="Kept off high-intensity points"
+        />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[340px_1fr]">
@@ -108,13 +264,33 @@ async function DashboardData() {
           <CardContent>
             <ul className="space-y-1">
               {byRank.map((r) => (
-                <li key={r.code} className="grid h-7 grid-cols-[76px_1fr_auto] items-center gap-2.5 text-sm">
-                  <Badge tone={r.category === "general" ? "primary" : r.category === "ar" ? "neutral" : "warning"} className="w-full justify-center">
+                <li
+                  key={r.code}
+                  className="grid h-7 grid-cols-[76px_1fr_auto] items-center gap-2.5 text-sm"
+                >
+                  <Badge
+                    tone={
+                      r.category === "general"
+                        ? "primary"
+                        : r.category === "ar"
+                          ? "neutral"
+                          : "warning"
+                    }
+                    className="w-full justify-center"
+                  >
                     {r.code}
                   </Badge>
-                  <Progress value={(r.available / r.total) * 100} tone="success" aria-label={`${r.code} availability`} className="h-1.5" />
+                  <Progress
+                    value={(r.available / r.total) * 100}
+                    tone="success"
+                    aria-label={`${r.code} availability`}
+                    className="h-1.5"
+                  />
                   <span className="tabular min-w-16 text-right whitespace-nowrap text-muted-foreground">
-                    <span className="font-semibold text-foreground">{r.available}</span> / {r.total}
+                    <span className="font-semibold text-foreground">
+                      {r.available}
+                    </span>{" "}
+                    / {r.total}
                   </span>
                 </li>
               ))}
@@ -125,15 +301,21 @@ async function DashboardData() {
         <Card className="min-w-0">
           <CardHeader>
             <CardTitle>Police stations / offices</CardTitle>
-            <CardDescription>Office Incharge and strength of each station.</CardDescription>
+            <CardDescription>
+              Office Incharge and strength of each station.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Station / office</TableHead>
-                  <TableHead className="hidden md:table-cell">Division</TableHead>
-                  <TableHead className="hidden sm:table-cell">Office Incharge</TableHead>
+                  <TableHead className="hidden md:table-cell">
+                    Division
+                  </TableHead>
+                  <TableHead className="hidden sm:table-cell">
+                    Office Incharge
+                  </TableHead>
                   <TableHead className="text-right">Available</TableHead>
                 </TableRow>
               </TableHeader>
@@ -141,7 +323,9 @@ async function DashboardData() {
                 {stations.map((s) => (
                   <TableRow key={s.id}>
                     <TableCell className="font-medium">{s.name}</TableCell>
-                    <TableCell className="hidden text-muted-foreground md:table-cell">{s.division}</TableCell>
+                    <TableCell className="hidden text-muted-foreground md:table-cell">
+                      {s.division}
+                    </TableCell>
                     <TableCell className="hidden sm:table-cell">
                       {s.inchargeName ? (
                         <span className="flex items-center gap-2">
@@ -149,12 +333,17 @@ async function DashboardData() {
                           {s.inchargeName}
                         </span>
                       ) : (
-                        <span className="text-muted-foreground">Not assigned</span>
+                        <span className="text-muted-foreground">
+                          Not assigned
+                        </span>
                       )}
                     </TableCell>
                     <TableCell className="tabular text-right">
                       <span className="font-semibold">{s.available}</span>
-                      <span className="text-muted-foreground"> / {s.strength}</span>
+                      <span className="text-muted-foreground">
+                        {" "}
+                        / {s.strength}
+                      </span>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -183,37 +372,74 @@ function DashboardSkeleton() {
   );
 }
 
-async function StateOverview() {
-  const rows = await getStateOverview();
+async function StateOverview({
+  user,
+}: {
+  user: Awaited<ReturnType<typeof requireUser>>;
+}) {
+  const [rows, inter] = await Promise.all([
+    getStateOverview(),
+    can(user, "dgp.distribute") ? interDistrictCounts(user) : null,
+  ]);
   return (
-    <Card className="min-w-0">
-      <CardHeader>
-        <CardTitle>State police units</CardTitle>
-        <CardDescription>Strength and availability by unit.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead>Unit</TableHead>
-              <TableHead className="hidden sm:table-cell">Stations / offices</TableHead>
-              <TableHead className="text-right">Available</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((u) => (
-              <TableRow key={u.id}>
-                <TableCell className="font-medium">{u.name}</TableCell>
-                <TableCell className="tabular hidden sm:table-cell">{u.stations}</TableCell>
-                <TableCell className="tabular text-right">
-                  <span className="font-semibold">{u.available}</span>
-                  <span className="text-muted-foreground"> / {u.persons}</span>
-                </TableCell>
+    <div className="space-y-4">
+      {inter && inter.openEscalations > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-2xl border bg-card px-4 py-2.5 shadow-soft">
+          <span className="flex items-center gap-1.5 text-sm font-medium">
+            <BellRing className="size-4 text-warning" aria-hidden /> Needs
+            attention
+          </span>
+          <Link
+            href="/dgp/requirements"
+            className="rounded-full focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <Badge
+              tone="warning"
+              className="h-7 px-3 text-xs hover:brightness-95"
+            >
+              {inter.openEscalations} unit request
+              {inter.openEscalations > 1 ? "s" : ""} to distribute{" "}
+              <ArrowRight className="size-3" aria-hidden />
+            </Badge>
+          </Link>
+        </div>
+      )}
+      <Card className="min-w-0">
+        <CardHeader>
+          <CardTitle>State police units</CardTitle>
+          <CardDescription>Strength and availability by unit.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>Unit</TableHead>
+                <TableHead className="hidden sm:table-cell">
+                  Stations / offices
+                </TableHead>
+                <TableHead className="text-right">Available</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+            </TableHeader>
+            <TableBody>
+              {rows.map((u) => (
+                <TableRow key={u.id}>
+                  <TableCell className="font-medium">{u.name}</TableCell>
+                  <TableCell className="tabular hidden sm:table-cell">
+                    {u.stations}
+                  </TableCell>
+                  <TableCell className="tabular text-right">
+                    <span className="font-semibold">{u.available}</span>
+                    <span className="text-muted-foreground">
+                      {" "}
+                      / {u.persons}
+                    </span>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

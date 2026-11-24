@@ -1,9 +1,9 @@
-import { customType, index, integer, pgTable, smallint, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { customType, index, integer, pgTable, smallint, text, timestamp, uniqueIndex, uuid, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { check } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 import { users } from "./auth";
-import { forceRequestKind, forceRequestStatus, personnelSource } from "./enums";
+import { escalationStatus, forceRequestKind, forceRequestStatus, personnelSource } from "./enums";
 import { persons, ranks, stations, units } from "./org";
 import { plans } from "./plans";
 
@@ -25,7 +25,10 @@ export const forceRequests = pgTable(
     kind: forceRequestKind().notNull().default("initial"),
     targetStationId: uuid().references(() => stations.id, { onDelete: "restrict" }),
     targetUnitId: uuid().references(() => units.id, { onDelete: "restrict" }),
+    /** Station requests a receiving unit sends on behalf of a unit-level request. */
     parentRequestId: uuid(),
+    /** Unit-level requests the DGP sends for an escalation. */
+    escalationId: uuid().references((): AnyPgColumn => escalations.id, { onDelete: "set null" }),
     status: forceRequestStatus().notNull().default("sent"),
     deadlineAt: timestamp({ withTimezone: true }).notNull(),
     note: text(),
@@ -113,4 +116,41 @@ export const planPersonnel = pgTable(
     createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [uniqueIndex("plan_personnel_plan_person_uq").on(t.planId, t.personId), index("plan_personnel_request_idx").on(t.requestId), index("plan_personnel_person_idx").on(t.personId)],
+);
+
+/** "Send to Chief Office": the gap a unit couldn't fill, for the DGP to distribute across units. */
+export const escalations = pgTable(
+  "escalations",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    planId: uuid()
+      .notNull()
+      .references(() => plans.id, { onDelete: "cascade" }),
+    fromUnitId: uuid()
+      .notNull()
+      .references(() => units.id, { onDelete: "cascade" }),
+    status: escalationStatus().notNull().default("open"),
+    note: text(),
+    deadlineAt: timestamp({ withTimezone: true }).notNull(),
+    createdBy: uuid().references(() => users.id, { onDelete: "set null" }),
+    createdAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    distributedAt: timestamp({ withTimezone: true }),
+    distributedBy: uuid().references(() => users.id, { onDelete: "set null" }),
+  },
+  (t) => [index("escalations_status_idx").on(t.status), index("escalations_plan_idx").on(t.planId)],
+);
+
+export const escalationLines = pgTable(
+  "escalation_lines",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    escalationId: uuid()
+      .notNull()
+      .references(() => escalations.id, { onDelete: "cascade" }),
+    rankId: uuid()
+      .notNull()
+      .references(() => ranks.id),
+    requested: integer().notNull(),
+  },
+  (t) => [uniqueIndex("escalation_lines_uq").on(t.escalationId, t.rankId), check("escalation_lines_ck", sql`${t.requested} > 0`)],
 );

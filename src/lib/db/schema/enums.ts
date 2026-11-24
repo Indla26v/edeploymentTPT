@@ -48,3 +48,6 @@ export const taskUpdateKind = pgEnum("task_update_kind", ["comment", "action_tak
 export const meetingStatus = pgEnum("meeting_status", ["scheduled", "held", "cancelled"]);
 export const appointmentStatus = pgEnum("appointment_status", ["scheduled", "met", "no_show", "cancelled"]);
 export const noteColor = pgEnum("note_color", ["yellow", "blue", "green", "pink", "gray"]);
+
+/** A unit's remaining gap sent to the DGP: open → distributed (to other units) → closed */
+export const escalationStatus = pgEnum("escalation_status", ["open", "distributed", "closed"]);

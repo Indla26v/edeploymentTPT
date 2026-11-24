@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ArrowRight, Clock, Loader2, MinusCircle, PackagePlus, Send, Sparkles, Undo2 } from "lucide-react";
+import { ArrowRight, Clock, Landmark, Loader2, MinusCircle, PackagePlus, Send, Sparkles, Undo2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { StatusPill } from "@/components/status-pill";
@@ -19,14 +19,16 @@ import { fmtDateTime, fmtRelative, fromLocalInput, toLocalInput } from "@/lib/fo
 import { ledgerTotals } from "@/lib/sourcing/ledger";
 import type { SourcingData } from "@/lib/queries/sourcing";
 import { cn } from "@/lib/utils";
-import { acceptShortfallAction, cancelRequestAction, proceedToPlacementAction, sendRequestsAction } from "./actions";
+import { acceptShortfallAction, cancelRequestAction, escalateAction, proceedToPlacementAction, sendRequestsAction } from "./actions";
 
 const REASONS = ["Men on other bandobast", "On leave / training", "Law & order duty at stations", "Court / VIP duty", "Other"];
 
-export function SourcingBoard({ data, canAct }: { data: SourcingData; canAct: boolean }) {
+export function SourcingBoard({ data, canAct, canEscalate }: { data: SourcingData; canAct: boolean; canEscalate: boolean }) {
   const [pending, start] = React.useTransition();
   const [accepting, setAccepting] = React.useState<SourcingData["ledger"][number] | null>(null);
   const [topUp, setTopUp] = React.useState<string[] | null>(null);
+  const [escalating, setEscalating] = React.useState(false);
+  const openEscalation = data.escalations.find((e) => e.status === "open");
   const totals = ledgerTotals(data.ledger);
   const outstanding = data.ledger.reduce((a, r) => a + r.outstanding, 0);
   const needTotal = Object.values(data.need).reduce((a, b) => a + b, 0);
@@ -55,6 +57,12 @@ export function SourcingBoard({ data, canAct }: { data: SourcingData; canAct: bo
               <StatusPill status="short" count={realShort} />
             ) : (
               <StatusPill status="pending" label={`${outstanding} awaiting reply`} />
+            )}
+            {openEscalation && <StatusPill status="sent" label="With the Chief Office" />}
+            {canEscalate && live && realShort > 0 && !openEscalation && (
+              <Button size="sm" variant="outline" onClick={() => setEscalating(true)}>
+                <Landmark /> Send to Chief Office
+              </Button>
             )}
             {canAct && live && needTotal > 0 && (
               <Button size="sm" variant="outline" onClick={() => setTopUp(Object.keys(data.need).filter((r) => data.need[r]! > 0))}>
@@ -122,6 +130,7 @@ export function SourcingBoard({ data, canAct }: { data: SourcingData; canAct: bo
       <Responses data={data} canAct={canAct && live} />
 
       <AcceptDialog planId={data.plan.id} row={accepting} onClose={() => setAccepting(null)} />
+      <EscalateDialog planId={data.plan.id} open={escalating} onClose={() => setEscalating(false)} gap={data.ledger.filter((r) => r.gap - r.outstanding > 0).map((r) => `${r.rankCode} ${r.gap - r.outstanding}`).join(", ")} />
       <Sheet open={!!topUp} onOpenChange={(o) => !o && setTopUp(null)}>
         <SheetContent className="sm:max-w-3xl">
           {topUp && <Distribution data={data} kind="top_up" rankIds={topUp} onDone={() => setTopUp(null)} />}
@@ -140,7 +149,7 @@ function Responses({ data, canAct }: { data: SourcingData; canAct: boolean }) {
         <p className="font-semibold">Station replies</p>
         <p className="text-xs text-muted-foreground">Each cell: committed / requested · named</p>
       </div>
-      <div className="overflow-x-auto">
+      <div className="relative overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b text-[11px] tracking-wide text-muted-foreground uppercase">
@@ -220,6 +229,54 @@ function Responses({ data, canAct }: { data: SourcingData; canAct: boolean }) {
         </table>
       </div>
     </Card>
+  );
+}
+
+function EscalateDialog({ planId, open, onClose, gap }: { planId: string; open: boolean; onClose: () => void; gap: string }) {
+  const [note, setNote] = React.useState("");
+  const [deadline, setDeadline] = React.useState(() => toLocalInput(new Date(Date.now() + 6 * 3600e3)));
+  const [pending, start] = React.useTransition();
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Send the gap to the Chief Office?</DialogTitle>
+          <DialogDescription>
+            The DGP asks other units for: <span className="font-medium text-foreground">{gap}</span>. Their names join your pool; whatever they can&apos;t give, you settle here as usual.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-3">
+          <div className="grid gap-1.5">
+            <Label htmlFor="esc-deadline">Needed by</Label>
+            <Input id="esc-deadline" type="datetime-local" value={deadline} onChange={(e) => setDeadline(e.target.value)} />
+          </div>
+          <div className="grid gap-1.5">
+            <Label htmlFor="esc-note">Note for the Chief Office</Label>
+            <Textarea id="esc-note" rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Why it's needed, reporting place…" />
+          </div>
+        </div>
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button variant="outline">Cancel</Button>
+          </DialogClose>
+          <Button
+            disabled={pending}
+            onClick={() =>
+              start(async () => {
+                const iso = fromLocalInput(deadline);
+                if (!iso) return void toast.error("Set a date and time");
+                const r = await escalateAction(planId, { note: note || null, deadlineAt: iso });
+                if (!r.ok) return void toast.error(r.error);
+                toast.success(`${r.data.men} men requested from the Chief Office`);
+                onClose();
+              })
+            }
+          >
+            {pending ? <Loader2 className="animate-spin" /> : <Landmark />} Send
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

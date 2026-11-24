@@ -22,4 +22,8 @@ export const DEMO_ACCOUNTS: DemoAccountSeed[] = [
   { username: "om", role: "Office Mgr", who: "SI, District Police Office" },
   { username: "staff1", role: "Employee", who: "HC, District Police Office" },
   { username: "pc1015", role: "Personnel", who: "PC, Town I PS" },
+  { username: "dgp", role: "DGP", who: "Chief Office — inter-district requests" },
+  { username: "sp.north", role: "UO", who: "SP, North Demo District" },
+  { username: "sho.north1", role: "OI", who: "SHO, North Town PS" },
+  { username: "comdt.apsp", role: "UO", who: "Commandant, APSP 1st Battalion" },
 ];

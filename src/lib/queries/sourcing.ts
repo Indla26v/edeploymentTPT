@@ -1,11 +1,11 @@
 import "server-only";
 
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { CurrentUser } from "@/lib/auth/session";
 import { AuthzError, UserError, scopeStationIds } from "@/lib/authz/authorize";
 import { getDb } from "@/lib/db";
-import { forceRequestLines, forceRequests, persons, planPersonnel, planPoints, planWindows, plans, preferences, ranks, stations } from "@/lib/db/schema";
+import { escalations, forceRequestLines, forceRequests, persons, planPersonnel, planPoints, planWindows, plans, preferences, ranks, stations } from "@/lib/db/schema";
 import { loadPlan } from "@/lib/plans/server";
 import { distribute, haversineKm } from "@/lib/sourcing/distribute";
 import { planLedger, planRange, stationFree } from "@/lib/sourcing/server";
@@ -15,7 +15,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export type EffectiveStatus = "sent" | "committed" | "partial" | "declined" | "auto_accepted" | "cancelled";
 const effective = (status: EffectiveStatus, deadline: Date, now: Date): EffectiveStatus => (status === "sent" && deadline < now ? "auto_accepted" : status);
 
-async function requestsWithLines(where: ReturnType<typeof eq>, now: Date) {
+export async function requestsWithLines(where: ReturnType<typeof eq>, now: Date) {
   const db = getDb();
   const reqs = await db
     .select({
@@ -24,7 +24,10 @@ async function requestsWithLines(where: ReturnType<typeof eq>, now: Date) {
       round: forceRequests.round,
       kind: forceRequests.kind,
       stationId: forceRequests.targetStationId,
-      station: stations.name,
+      unitId: forceRequests.targetUnitId,
+      station: sql<string>`coalesce(${stations.name}, (select name from units u where u.id = ${forceRequests.targetUnitId}))`,
+      parentRequestId: forceRequests.parentRequestId,
+      escalationId: forceRequests.escalationId,
       status: forceRequests.status,
       deadlineAt: forceRequests.deadlineAt,
       sentAt: forceRequests.sentAt,
@@ -48,7 +51,8 @@ async function requestsWithLines(where: ReturnType<typeof eq>, now: Date) {
           requested: forceRequestLines.requested,
           committed: forceRequestLines.committed,
           reason: forceRequestLines.reason,
-          named: sql<number>`(select count(*) from plan_personnel pp where pp.request_id = ${forceRequestLines.requestId} and pp.rank_id = ${forceRequestLines.rankId})`.mapWith(Number),
+          // A unit-level request counts the names its own stations sent (child requests) too.
+          named: sql<number>`(select count(*) from plan_personnel pp where pp.rank_id = ${forceRequestLines.rankId} and pp.request_id in (select f.id from force_requests f where f.id = ${forceRequestLines.requestId} or f.parent_request_id = ${forceRequestLines.requestId}))`.mapWith(Number),
         })
         .from(forceRequestLines)
         .innerJoin(ranks, eq(ranks.id, forceRequestLines.rankId))
@@ -71,7 +75,7 @@ export async function getSourcing(user: CurrentUser, planId: string, now = new D
   const range = await planRange(db, plan.id);
   const [ledger, requests, stationRows, prefRows, pts, windows] = await Promise.all([
     planLedger(db, plan.id, now),
-    requestsWithLines(eq(forceRequests.planId, plan.id), now),
+    requestsWithLines(and(eq(forceRequests.planId, plan.id), isNull(forceRequests.parentRequestId)) as ReturnType<typeof eq>, now),
     db.select({ id: stations.id, name: stations.name, code: stations.code, lat: stations.lat, lng: stations.lng }).from(stations).where(eq(stations.unitId, plan.unitId)).orderBy(asc(stations.displayOrder)),
     db
       .select({ kind: preferences.kind, stationId: preferences.stationId, rankId: preferences.rankId, count: preferences.count, personStationId: persons.stationId, personRankId: persons.rankId })
@@ -101,7 +105,8 @@ export async function getSourcing(user: CurrentUser, planId: string, now = new D
     stationPreferences: prefRows.filter((p) => p.kind === "station" && p.stationId).map((p) => ({ stationId: p.stationId!, rankId: p.rankId, count: p.count })),
     personPreferences: prefRows.filter((p) => p.kind === "person" && p.personStationId).map((p) => ({ stationId: p.personStationId!, rankId: p.personRankId! })),
   });
-  return { plan, windows, ledger, requests, stations: supply, need, suggestion, venue };
+  const esc = await db.select({ id: escalations.id, status: escalations.status, createdAt: escalations.createdAt }).from(escalations).where(eq(escalations.planId, plan.id)).orderBy(desc(escalations.createdAt));
+  return { plan, windows, ledger, requests, stations: supply, need, suggestion, venue, escalations: esc };
 }
 
 export type SourcingData = Awaited<ReturnType<typeof getSourcing>>;

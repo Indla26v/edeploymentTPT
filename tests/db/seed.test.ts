@@ -28,12 +28,16 @@ describe.skipIf(!url)("database: migrations + demo seed", () => {
   });
 
   it("loads the demo district", async () => {
-    const [p] = await db.select({ n: count() }).from(persons);
-    const [s] = await db.select({ n: count() }).from(stations);
+    const [demo] = await db.select().from(units).where(eq(units.code, "DEMO-DIST"));
+    const [p] = await db.select({ n: count() }).from(persons).where(eq(persons.unitId, demo!.id));
+    const [s] = await db.select({ n: count() }).from(stations).where(eq(stations.unitId, demo!.id));
     const [u] = await db.select({ n: count() }).from(units);
     expect(p!.n).toBe(400);
     expect(s!.n).toBe(12);
     expect(u!.n).toBe(4);
+    // North district and the APSP battalion also have officers (for inter-district requests).
+    const [all] = await db.select({ n: count() }).from(persons);
+    expect(all!.n).toBeGreaterThan(400);
   });
 
   it("gives every station an Office Incharge", async () => {

@@ -43,4 +43,13 @@ test.describe("accessibility", () => {
       test(path, async ({ page }) => audit(page, path));
     }
   });
+
+  test.describe("Inter-district screens", () => {
+    for (const [user, path] of [["dgp", "/dashboard"], ["dgp", "/dgp/requirements"], ["sp.north", "/requirements/incoming"]] as const) {
+      test.describe(user, () => {
+        test.use({ storageState: authFile(user) });
+        test(path, async ({ page }) => audit(page, path));
+      });
+    }
+  });
 });

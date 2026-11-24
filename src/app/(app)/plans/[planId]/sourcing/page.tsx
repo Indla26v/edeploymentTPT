@@ -44,7 +44,7 @@ async function Sourcing({ params }: PageProps<"/plans/[planId]/sourcing">) {
         description={`${fmtRange(data.windows[0]?.startsAt, data.windows.at(-1)?.endsAt)}${data.plan.venue ? ` · ${data.plan.venue}` : ""}`}
       />
       <StageTracker stages={planStages(status).map((s) => (s.key === "sourcing" && status === "sourcing" && short ? { ...s, state: "attention" as const, note: `Short by ${short}` } : s))} />
-      <SourcingBoard data={data} canAct={can(user, "force.distribute") && user.activeRole === "UNIT_OFFICER"} />
+      <SourcingBoard data={data} canAct={can(user, "force.distribute") && user.activeRole === "UNIT_OFFICER"} canEscalate={can(user, "force.escalate") && user.activeRole === "UNIT_OFFICER"} />
     </div>
   );
 }

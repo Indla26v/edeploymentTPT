@@ -1,11 +1,12 @@
 "use server";
 
 import { refresh } from "next/cache";
-import { eq, inArray, max } from "drizzle-orm";
+import { and, eq, inArray, max } from "drizzle-orm";
 import { z } from "zod";
 
 import { UserError } from "@/lib/authz/authorize";
-import { forceRequestLines, forceRequests, plans, shortfallAcceptances, stations } from "@/lib/db/schema";
+import { escalationLines, escalations, forceRequestLines, forceRequests, plans, shortfallAcceptances, stations } from "@/lib/db/schema";
+import { dgpUsers } from "@/lib/sourcing/escalation";
 import { loadPlan, planEvent } from "@/lib/plans/server";
 import { mutate } from "@/lib/server/mutate";
 import { notifyUser, queueMessage } from "@/lib/server/notify";
@@ -143,3 +144,32 @@ export async function proceedToPlacementAction(planId: string) {
   });
 }
 
+
+/**
+ * "Send to Chief Office": what the unit's stations couldn't give (gap not covered by pending replies)
+ * goes to the DGP, who distributes it across other units. The plan keeps going meanwhile.
+ */
+export async function escalateAction(planId: string, input: { note: string | null; deadlineAt: string }) {
+  return mutate({
+    permission: "force.escalate",
+    schema: z.object({ note: z.string().trim().max(500).nullable().transform((v) => v || null), deadlineAt: z.string().datetime({ offset: true }) }),
+    input,
+    message: "Sent to the Chief Office",
+    run: async ({ tx, user, data, audit }) => {
+      const plan = await loadPlan(tx, user, planId, { forUpdate: true });
+      if (plan.status !== "sourcing") throw new UserError("Only plans in force sourcing can be escalated.");
+      const [open] = await tx.select({ id: escalations.id }).from(escalations).where(and(eq(escalations.planId, plan.id), eq(escalations.status, "open"))).limit(1);
+      if (open) throw new UserError("This plan already has a request with the Chief Office.");
+      const gap = (await planLedger(tx, plan.id)).map((r) => ({ rankId: r.rankId, code: r.rankCode, n: Math.max(0, r.gap - r.outstanding) })).filter((r) => r.n > 0);
+      if (gap.length === 0) throw new UserError("Nothing to escalate — no rank is short.");
+      const [e] = await tx.insert(escalations).values({ planId: plan.id, fromUnitId: plan.unitId, note: data.note, deadlineAt: new Date(data.deadlineAt), createdBy: user.id }).returning({ id: escalations.id });
+      await tx.insert(escalationLines).values(gap.map((g) => ({ escalationId: e!.id, rankId: g.rankId, requested: g.n })));
+      const men = gap.reduce((a, g) => a + g.n, 0);
+      for (const u of await dgpUsers(tx)) await notifyUser(tx, u, { title: `Force needed from other units: ${plan.title}`, body: gap.map((g) => `${g.code} ${g.n}`).join(", "), href: `/dgp/requirements/${e!.id}`, kind: "action" });
+      await planEvent(tx, plan.id, user.id, "escalated", `Sent ${men} men to the Chief Office (${gap.map((g) => `${g.code} ${g.n}`).join(", ")})`);
+      await audit({ action: "force.escalate", entity: "plan", entityId: plan.id, after: { gap, note: data.note } });
+      refresh();
+      return { men };
+    },
+  });
+}

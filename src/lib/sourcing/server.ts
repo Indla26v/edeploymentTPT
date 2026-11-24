@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, eq, inArray, lt, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 
 import type { DbOrTx } from "../auth/accounts";
 import { forceRequestLines, forceRequests, notificationsOutbox, planComponents, planWindows, plans, ranks, roleAssignments, shortfallAcceptances, slots } from "../db/schema";
@@ -32,7 +32,7 @@ export async function planLedger(db: DbOrTx, planId: string, now = new Date()): 
       .select({ rankId: forceRequestLines.rankId, requested: forceRequestLines.requested, committed: forceRequestLines.committed, status: forceRequests.status, kind: forceRequests.kind, deadlineAt: forceRequests.deadlineAt })
       .from(forceRequestLines)
       .innerJoin(forceRequests, eq(forceRequests.id, forceRequestLines.requestId))
-      .where(eq(forceRequests.planId, planId));
+      .where(and(eq(forceRequests.planId, planId), isNull(forceRequests.parentRequestId)));
   const named = await db.execute<{ rank_id: string; n: number }>(sql`select rank_id, count(*)::int n from plan_personnel where plan_id = ${planId} group by rank_id`);
   const accepted = await db.select({ rankId: shortfallAcceptances.rankId, n: sql<number>`sum(${shortfallAcceptances.count})`.mapWith(Number) }).from(shortfallAcceptances).where(eq(shortfallAcceptances.planId, planId)).groupBy(shortfallAcceptances.rankId);
   const rankIds = new Set([...req.map((r) => r.rankId), ...lines.map((l) => l.rankId)]);

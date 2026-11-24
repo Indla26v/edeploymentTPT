@@ -71,6 +71,13 @@
       "when": 1795525888489,
       "tag": "0009_two_factor",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1795526534301,
+      "tag": "0010_escalations",
+      "breakpoints": true
     }
   ]
 }
